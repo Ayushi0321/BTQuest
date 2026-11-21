@@ -1,5 +1,5 @@
 const KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-const MODEL = 'gemini-3.7-flash';
+const MODEL = 'gemini-3.8-flash';
 
 export async function askGemini(prompt: string): Promise<string> {
   if (!KEY) throw new Error('Missing EXPO_PUBLIC_GEMINI_API_KEY in .env');
