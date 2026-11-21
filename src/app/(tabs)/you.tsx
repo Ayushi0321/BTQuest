@@ -6,6 +6,7 @@ import { getUsage, hasElevenLabs } from '@/api/elevenlabs';
 
 import { Mascot } from '@/components/Mascot';
 import { Button, Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
+import { riderMascot } from '@/data/stations';
 import { buzz, type BuzzPattern } from '@/lib/haptics';
 import { useAuth } from '@/state/auth';
 import { useFeedback, type FeedbackSettings } from '@/state/feedback';
@@ -60,7 +61,7 @@ export default function You() {
   return (
     <Screen title="You">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <Mascot stationId={profile?.fav_station ?? 'KEN'} size={72} frame />
+        <Mascot stationId={riderMascot(profile?.fav_station, profile?.username ?? '')} size={72} frame />
         <View style={{ flex: 1 }}>
           <T size={24} weight="black">Hi, {profile?.username ?? 'rider'}</T>
           <T size={15} color={c.muted}>{session?.user.email}</T>
