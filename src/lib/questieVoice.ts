@@ -2,7 +2,7 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from 'expo-aud
 import * as Speech from 'expo-speech';
 import { useSyncExternalStore } from 'react';
 
-import { hasElevenLabs, synthesize } from '@/api/elevenlabs';
+import { BudgetError, hasElevenLabs, synthesize } from '@/api/elevenlabs';
 
 // Questie's voice: ElevenLabs when a key is set, the phone's built-in voice otherwise
 // (or if ElevenLabs fails / is slow), so announcements never go silent.
@@ -12,6 +12,13 @@ let player: AudioPlayer | null = null;
 let token = 0;
 let speaking = false;
 let modeReady = false;
+let premium = true; // rider/dev switch: use ElevenLabs or the phone's voice
+let warnedBudget = false;
+
+/** Turn Questie's ElevenLabs voice on/off (off = phone voice, no credits used). */
+export function setPremiumVoice(on: boolean) {
+  premium = on;
+}
 const listeners = new Set<() => void>();
 
 function setSpeaking(v: boolean) {
@@ -51,11 +58,11 @@ export async function questieSay(text: string, rate = 1): Promise<void> {
     setAudioModeAsync({ playsInSilentMode: true, allowsRecording: false }).catch(() => {});
   }
 
-  if (hasElevenLabs()) {
+  if (premium && hasElevenLabs()) {
     try {
       // don't keep the rider waiting: fall back to the device voice after 6 s
       const uri = await Promise.race([
-        synthesize(text, rate),
+        synthesize(text),
         new Promise<never>((_, reject) => setTimeout(() => reject(new Error('ElevenLabs timeout')), 6000)),
       ]);
       if (my !== token) return; // a newer line started meanwhile
@@ -72,7 +79,12 @@ export async function questieSay(text: string, rate = 1): Promise<void> {
       p.play();
       return;
     } catch (e) {
-      console.warn('[Questie] ElevenLabs unavailable, using device voice:', String(e));
+      if (e instanceof BudgetError) {
+        if (!warnedBudget) console.warn('[Questie]', e.message, '— using the phone voice until tomorrow.');
+        warnedBudget = true;
+      } else {
+        console.warn('[Questie] ElevenLabs unavailable, using device voice:', String(e));
+      }
       if (my !== token) return;
     }
   }

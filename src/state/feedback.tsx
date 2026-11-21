@@ -3,7 +3,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AccessibilityInfo } from 'react-native';
 
 import { buzz, type BuzzPattern } from '@/lib/haptics';
-import { questieSay } from '@/lib/questieVoice';
+import { questieSay, setPremiumVoice } from '@/lib/questieVoice';
 
 // "Hear it your way": every announcement goes out on the channels the rider switched on —
 // on-screen text, voice, and vibration. Settings are saved on the phone.
@@ -14,6 +14,7 @@ export type FeedbackSettings = {
   vibration: boolean; // haptic pattern
   comfort: boolean;   // motion comfort: calm screen, no animations
   speechRate: number; // 0.8 slow · 1 normal · 1.15 fast
+  premiumVoice: boolean; // Questie's ElevenLabs voice (off = phone voice, saves credits)
 };
 
 export type AnnouncementKind = 'next' | 'yourStop' | 'arrive' | 'reward' | 'info' | 'error';
@@ -39,7 +40,7 @@ type FeedbackValue = {
   loaded: boolean;
 };
 
-const DEFAULTS: FeedbackSettings = { text: true, voice: true, vibration: true, comfort: false, speechRate: 1 };
+const DEFAULTS: FeedbackSettings = { text: true, voice: true, vibration: true, comfort: false, speechRate: 1, premiumVoice: true };
 const STORAGE_KEY = 'tquest.feedback.v1';
 const Ctx = createContext<FeedbackValue | null>(null);
 
@@ -57,6 +58,10 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
       .finally(() => setLoaded(true));
   }, []);
+
+  useEffect(() => {
+    setPremiumVoice(settings.premiumVoice);
+  }, [settings.premiumVoice]);
 
   useEffect(() => {
     if (loaded) AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(settings)).catch(() => {});

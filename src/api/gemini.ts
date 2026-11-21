@@ -2,7 +2,7 @@
 // Docs: https://ai.google.dev/gemini-api/docs — if a model name stops working, pick a current one there.
 
 const KEY = process.env.EXPO_PUBLIC_GEMINI_API_KEY;
-export const GEMINI_MODEL = 'gemini-3.7-flash';
+export const GEMINI_MODEL = 'gemini-3.1-pro-preview';
 
 export type GeminiPart = { text: string } | { inline_data: { mime_type: string; data: string } };
 export type GeminiTurn = { role: 'user' | 'model'; parts: GeminiPart[] };
