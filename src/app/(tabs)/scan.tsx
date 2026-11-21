@@ -35,6 +35,7 @@ export default function Scan() {
         extra = `${target.name} already in your artwork stamps`;
       }
     }
+    if (settings.vibration) buzz('success');
     const { card, isNew } = pull(target.stationId, { name: target.name, code: target.code });
     setResult({ card, isNew, extra });
   }
@@ -49,7 +50,6 @@ export default function Scan() {
       setTimeout(() => { busy.current = false; setNotice(''); }, 2000);
       return;
     }
-    if (settings.vibration) buzz('success');
     award(target);
   }
 

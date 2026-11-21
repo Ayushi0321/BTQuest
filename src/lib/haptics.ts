@@ -1,4 +1,5 @@
 import * as Haptics from 'expo-haptics';
+import { Platform, Vibration } from 'react-native';
 
 // Distinct vibration patterns, so a rider can tell what happened without looking at the phone.
 // Built from short haptic taps on a timer, so the same pattern feels the same on iPhone and Android.
@@ -15,6 +16,7 @@ export type BuzzPattern = 'tap' | 'nextStop' | 'yourStop' | 'arrived' | 'reward'
 
 const { Light, Medium, Heavy } = Haptics.ImpactFeedbackStyle;
 const { Success, Error: Err } = Haptics.NotificationFeedbackType;
+const Android = Haptics.AndroidHaptics;
 
 type Step = { at: number; impact?: Haptics.ImpactFeedbackStyle; notify?: Haptics.NotificationFeedbackType };
 
@@ -43,7 +45,24 @@ export function buzz(pattern: BuzzPattern) {
   timers.forEach(clearTimeout);
   timers = PATTERNS[pattern].map((step) =>
     setTimeout(() => {
-      const p = step.notify !== undefined ? Haptics.notificationAsync(step.notify) : Haptics.impactAsync(step.impact ?? Medium);
+      const duration = step.notify === Err ? 80 : step.notify === Success ? 50 : step.impact === Heavy ? 70 : step.impact === Medium ? 45 : 20;
+      const p = Platform.OS === 'android'
+        ? Haptics.performAndroidHapticsAsync(
+          step.notify === Err
+            ? Android.Reject
+            : step.notify === Success
+              ? Android.Confirm
+              : step.impact === Heavy
+                ? Android.Long_Press
+                : step.impact === Medium
+                  ? Android.Virtual_Key
+                  : Android.Keyboard_Tap
+        ).catch(() => {
+          Vibration.vibrate(duration);
+        })
+        : step.notify !== undefined
+          ? Haptics.notificationAsync(step.notify)
+          : Haptics.impactAsync(step.impact ?? Medium);
       p.catch(() => {}); // no haptics on web / some devices — ignore
     }, step.at)
   );
