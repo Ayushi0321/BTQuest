@@ -35,7 +35,7 @@ export default function ArtScreen() {
   useEffect(() => {
     if (!s?.art || !found) return;
     let alive = true;
-    artHistory({ title: s.art.title, artist: s.art.artist, stationName: s.name })
+    artHistory({ stationId: s.id, title: s.art.title, artist: s.art.artist, stationName: s.name })
       .then((h) => { if (!alive) return; setHistory(h); play(h.text); })
       .catch((e) => { if (alive) setError(String(e)); });
     return () => { alive = false; stopQuestie(); };
@@ -76,6 +76,7 @@ export default function ArtScreen() {
           {history ? (
             <>
               <T size={17} style={{ lineHeight: 26 }}>{history.text}</T>
+              {history.offline && <T size={12} color={c.muted} style={{ marginTop: 6 }}>Offline summary · Questie will look up more details when it’s back online.</T>}
               <View style={{ flexDirection: 'row', gap: 10, marginTop: 14 }}>
                 <Button label={talking ? 'Stop' : 'Listen again'} kind={talking ? 'plain' : 'blue'} style={{ flex: 1 }} onPress={() => (talking ? stopQuestie() : play(history.text))} />
               </View>

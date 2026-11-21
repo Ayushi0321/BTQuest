@@ -5,6 +5,7 @@ import Svg, { Circle, Path } from 'react-native-svg';
 
 import { askGemini } from '@/api/gemini';
 import { QUESTIE_PERSONA } from '@/api/questie';
+import { nearbyLine } from '@/data/offline';
 import { Mascot } from '@/components/Mascot';
 import { PullModal } from '@/components/PullModal';
 import { QuestieBubble } from '@/components/QuestieBubble';
@@ -70,7 +71,10 @@ export default function Ride() {
       setGreeting(line);
       announce({ kind: 'info', banner: false, text: line });
     } catch (e) {
-      setGreeting('I couldn’t reach my brain just now — try again in a moment!');
+      // Gemini unavailable → hand-written facts about the station
+      const line = nearbyLine(next.id);
+      setGreeting(line);
+      announce({ kind: 'info', banner: false, text: line });
     }
     setLoading(false);
   }

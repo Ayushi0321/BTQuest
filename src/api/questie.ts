@@ -1,6 +1,7 @@
 import { generate, type GeminiPart, type GeminiTurn, type Source } from '@/api/gemini';
 import { describeCard, RARITY, type Rarity } from '@/components/StampCard';
 import { stationById } from '@/data/stations';
+import { ART_HISTORY, offlineAnswer, offlineCardStory, offlineStampLine } from '@/data/offline';
 import { cached } from '@/lib/cache';
 
 // QUESTIE'S BRAIN (Gemini). Questie is TQuest's one talking guide; the station mascots are only art.
@@ -23,8 +24,7 @@ function cardFacts(c: CardFacts) {
 
 /** One celebratory line when a rider unlocks a card. Falls back to a fixed line if Gemini is slow. */
 export async function stampLine(c: CardFacts): Promise<string> {
-  const s = stationById(c.stationId);
-  const fallback = `${RARITY[c.rarity].label === 'COMMON' ? 'Nice' : 'Whoa'}! ${s?.mascot} from ${c.place ?? s?.name} joined your album.`;
+  const fallback = offlineStampLine(c);
   try {
     const { text } = await generate(
       [{ role: 'user', parts: [{ text: `A rider just unlocked this stamp card: ${cardFacts(c)}. Celebrate it in ONE short spoken sentence, max 18 words, mentioning the mascot and something from the scene. Rarer cards deserve more excitement.` }] }],
@@ -37,7 +37,15 @@ export async function stampLine(c: CardFacts): Promise<string> {
 }
 
 /** A one-line story for a card (cached per card, so tapping again replays the same story). */
-export function cardStory(c: CardFacts & { uid: string }): Promise<string> {
+export async function cardStory(c: CardFacts & { uid: string }): Promise<string> {
+  try {
+    return await geminiCardStory(c);
+  } catch {
+    return offlineCardStory(c); // not cached, so Gemini can write a better one later
+  }
+}
+
+function geminiCardStory(c: CardFacts & { uid: string }): Promise<string> {
   return cached(`story.${c.uid}`, async () => {
     const { text } = await generate(
       [{ role: 'user', parts: [{ text: `Tell a tiny one-sentence story (max 28 words) about this stamp card, as if narrating the picture: ${cardFacts(c)}. Make it charming and specific to the scene.` }] }],
@@ -48,10 +56,19 @@ export function cardStory(c: CardFacts & { uid: string }): Promise<string> {
   });
 }
 
-export type ArtHistory = { text: string; sources: Source[] };
+export type ArtHistory = { text: string; sources: Source[]; offline?: boolean };
 
 /** The real history behind an Arts on the T piece, grounded with Google Search (cached). */
-export function artHistory(art: { title: string; artist: string; stationName: string }): Promise<ArtHistory> {
+export async function artHistory(art: { stationId: string; title: string; artist: string; stationName: string }): Promise<ArtHistory> {
+  try {
+    return await geminiArtHistory(art);
+  } catch {
+    const text = ART_HISTORY[art.stationId] ?? `${art.title} is an artwork by ${art.artist} at ${art.stationName} station, part of the MBTA’s Arts on the T program. Ask me again later and I’ll tell you more!`;
+    return { text, sources: [], offline: true };
+  }
+}
+
+function geminiArtHistory(art: { title: string; artist: string; stationName: string }): Promise<ArtHistory> {
   return cached(`art.${art.title}`, async () => {
     const { text, sources } = await generate(
       [{
@@ -75,7 +92,19 @@ export type ChatInput = { text: string } | { audio: { base64: string; mimeType: 
  * Ask Questie anything. Voice questions are sent to Gemini as audio (no separate speech-to-text step):
  * Gemini returns what it heard plus its answer. Answers can use Google Search for real-world facts.
  */
-export async function askQuestie(history: GeminiTurn[], input: ChatInput, riderContext: string): Promise<{ heard?: string; reply: string; sources: Source[] }> {
+export type QuestieReply = { heard?: string; reply: string; sources: Source[]; offline?: boolean };
+
+export async function askQuestie(history: GeminiTurn[], input: ChatInput, riderContext: string): Promise<QuestieReply> {
+  try {
+    return await askGeminiQuestie(history, input, riderContext);
+  } catch {
+    // Gemini out of quota / offline → hand-written answers so Questie still talks
+    if ('text' in input) return { reply: offlineAnswer(input.text), sources: [], offline: true };
+    return { reply: 'My ears are taking a little break right now. Try typing your question, or tap one of the questions below!', sources: [], offline: true };
+  }
+}
+
+async function askGeminiQuestie(history: GeminiTurn[], input: ChatInput, riderContext: string): Promise<QuestieReply> {
   const parts: GeminiPart[] =
     'text' in input
       ? [{ text: input.text }]
