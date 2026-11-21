@@ -42,4 +42,5 @@ example
 /ios
 /android
 
+# secrets (API keys) — never commit
 .env
