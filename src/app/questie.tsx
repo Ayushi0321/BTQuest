@@ -6,9 +6,10 @@ import { KeyboardAvoidingView, Linking, Platform, Pressable, ScrollView, Text, T
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Svg, { Path, Rect } from 'react-native-svg';
 
-import type { GeminiTurn, Source } from '@/api/gemini';
+import { geminiOffline, type GeminiTurn, type Source } from '@/api/gemini';
 import { askQuestie, type ChatInput } from '@/api/questie';
 import { Questie } from '@/components/Questie';
+import { OFFLINE_SUGGESTIONS } from '@/data/offline';
 import { buzz } from '@/lib/haptics';
 import { questieSay, stopQuestie, useQuestieSpeaking } from '@/lib/questieVoice';
 import { useFeedback } from '@/state/feedback';
@@ -31,7 +32,7 @@ const REC: RecordingOptions = {
 };
 const REC_MIME = Platform.OS === 'ios' ? 'audio/wav' : 'audio/aac';
 
-type Msg = { id: number; from: 'questie' | 'rider'; text: string; sources?: Source[]; pending?: boolean; error?: boolean };
+type Msg = { id: number; from: 'questie' | 'rider'; text: string; sources?: Source[]; pending?: boolean; error?: boolean; offline?: boolean };
 
 const GREETING = 'Hi, I’m Questie, your Red Line buddy! Hold the mic and ask me anything, or type below.';
 const SUGGESTIONS = ['What can I do in TQuest?', 'How do I get Legendary cards?', 'Tell me about Kendall Band', 'What’s fun near Park Street?'];
@@ -76,9 +77,9 @@ export default function QuestieScreen() {
     ]);
     setBusy(true);
     try {
-      const { heard, reply, sources } = await askQuestie(history, inp, riderContext());
+      const { heard, reply, sources, offline } = await askQuestie(history, inp, riderContext());
       const asked = 'text' in inp ? inp.text : heard || '(voice question)';
-      setMsgs((m) => m.map((x) => (x.id === riderId ? { ...x, text: asked, pending: false } : x.id === replyId ? { ...x, text: reply, sources, pending: false } : x)));
+      setMsgs((m) => m.map((x) => (x.id === riderId ? { ...x, text: asked, pending: false } : x.id === replyId ? { ...x, text: reply, sources, pending: false, offline } : x)));
       setHistory((h): GeminiTurn[] => [...h, { role: 'user' as const, parts: [{ text: asked }] }, { role: 'model' as const, parts: [{ text: reply }] }].slice(-12));
       if (settings.vibration) buzz('tap');
       if (settings.voice) questieSay(reply, settings.speechRate);
@@ -134,7 +135,7 @@ export default function QuestieScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: font.black, fontSize: 22, color: c.text }}>Questie</Text>
-            <Text style={{ fontFamily: font.heavy, fontSize: 12, color: c.muted }}>Your Red Line guide · Gemini + ElevenLabs</Text>
+            <Text style={{ fontFamily: font.heavy, fontSize: 12, color: c.muted }}>{geminiOffline() ? 'Offline mode · answers common questions' : 'Your Red Line guide · Gemini + ElevenLabs'}</Text>
           </View>
           {talking && (
             <Pressable onPress={stopQuestie} accessibilityLabel="Stop talking"
@@ -160,6 +161,7 @@ export default function QuestieScreen() {
               }}>
                 <Text style={{ fontFamily: font.bold, fontSize: 16, lineHeight: 23, color: c.text }}>{m.text}</Text>
               </View>
+              {m.offline && <Text style={{ fontFamily: font.heavy, fontSize: 11, color: c.muted }}>offline answer</Text>}
               {m.from === 'questie' && !m.pending && !m.error && m.id !== 0 && (
                 <Pressable onPress={() => questieSay(m.text, settings.speechRate)} accessibilityLabel="Hear this again" style={{ alignSelf: 'flex-start' }}>
                   <Text style={{ fontFamily: font.black, fontSize: 12, color: c.blueInk }}>▶ Hear again</Text>
@@ -177,9 +179,9 @@ export default function QuestieScreen() {
               )}
             </View>
           ))}
-          {msgs.length === 1 && (
+          {(msgs.length === 1 || (!busy && msgs[msgs.length - 1]?.offline)) && (
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 6 }}>
-              {SUGGESTIONS.map((s) => (
+              {(geminiOffline() ? OFFLINE_SUGGESTIONS : SUGGESTIONS).map((s) => (
                 <Pressable key={s} onPress={() => send({ text: s })} style={{ paddingHorizontal: 12, paddingVertical: 8, borderRadius: 99, backgroundColor: c.blueTint }}>
                   <Text style={{ fontFamily: font.black, fontSize: 13, color: c.blueInk }}>{s}</Text>
                 </Pressable>
