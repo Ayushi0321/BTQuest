@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { GameProvider } from '@/state/game';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeContext';
 
 SplashScreen.preventAutoHideAsync();
@@ -19,7 +20,9 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <Root />
+      <GameProvider>
+        <Root />
+      </GameProvider>
     </AppThemeProvider>
   );
 }
@@ -31,6 +34,7 @@ function Root() {
       <StatusBar style={isDark ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg } }}>
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="station/[id]" />
       </Stack>
     </>
   );

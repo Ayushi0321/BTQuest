@@ -64,7 +64,7 @@ export function Mascot({ stationId, size = 96, locked = false, frame = false, fr
   );
 }
 
-function AccessoryShape({ kind }: { kind: Accessory }) {
+export function AccessoryShape({ kind }: { kind: Accessory }) {
   switch (kind) {
     case 'grad':
       return (
