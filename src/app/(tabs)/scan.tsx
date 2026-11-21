@@ -1,5 +1,4 @@
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
-import * as Haptics from 'expo-haptics';
 import { useIsFocused } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Platform, View } from 'react-native';
@@ -8,6 +7,8 @@ import { PullModal } from '@/components/PullModal';
 import { Button, Card, Kicker, Pill, Screen, T } from '@/components/ui';
 import { stationById } from '@/data/stations';
 import { parseQr, QR_TARGETS, type QrTarget } from '@/data/places';
+import { buzz } from '@/lib/haptics';
+import { useFeedback } from '@/state/feedback';
 import { useGame, type OwnedCard } from '@/state/game';
 import { useAppTheme } from '@/theme/ThemeContext';
 
@@ -19,6 +20,7 @@ export default function Scan() {
   const focused = useIsFocused();
   const [permission, requestPermission] = useCameraPermissions();
   const { cards, artFound, pull, findArt } = useGame();
+  const { settings, announce } = useFeedback();
   const [result, setResult] = useState<{ card: OwnedCard; isNew: boolean; extra?: string } | null>(null);
   const [notice, setNotice] = useState('');
   const busy = useRef(false); // the camera fires many times per second; handle one code at a time
@@ -43,11 +45,11 @@ export default function Scan() {
     const target = parseQr(data);
     if (!target) {
       setNotice('That’s not a TQuest code. Look for the red TQuest sign.');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error).catch(() => {});
+      announce({ kind: 'error', text: 'That’s not a TQuest code', speak: 'That’s not a TQuest code. Look for the red TQuest sign.', buzz: 'error', banner: false });
       setTimeout(() => { busy.current = false; setNotice(''); }, 2000);
       return;
     }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy).catch(() => {});
+    if (settings.vibration) buzz('success');
     award(target);
   }
 

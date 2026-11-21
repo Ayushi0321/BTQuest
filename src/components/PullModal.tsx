@@ -1,4 +1,3 @@
-import * as Haptics from 'expo-haptics';
 import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
@@ -7,6 +6,7 @@ import { Mascot } from '@/components/Mascot';
 import { RARITY, StampCard } from '@/components/StampCard';
 import { Button } from '@/components/ui';
 import { stationById } from '@/data/stations';
+import { useFeedback } from '@/state/feedback';
 import type { OwnedCard } from '@/state/game';
 import { font } from '@/theme/colors';
 
@@ -26,7 +26,9 @@ type Props = {
 
 export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Props) {
   const [open, setOpen] = useState(false);
-  const [reduce, setReduce] = useState(false);
+  const [reduceSystem, setReduce] = useState(false);
+  const { settings, announce } = useFeedback();
+  const reduce = reduceSystem || settings.comfort;
   const shake = useRef(new Animated.Value(0)).current;
   const flip = useRef(new Animated.Value(0)).current;
   const spin = useRef(new Animated.Value(0)).current;
@@ -68,7 +70,14 @@ export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Prop
 
   const reveal = () => {
     setOpen(true);
-    Haptics.notificationAsync(card.rarity === 'C' ? Haptics.NotificationFeedbackType.Success : Haptics.NotificationFeedbackType.Warning).catch(() => {});
+    const word = { C: 'Common', R: 'Rare', E: 'Epic', L: 'Legendary' }[card.rarity];
+    announce({
+      kind: 'reward',
+      banner: false, // the reveal itself is the on-screen text
+      text: `${word} card: ${s.mascot}`,
+      speak: `${word} card! ${s.mascot} from ${card.place ?? s.name}.`,
+      buzz: card.rarity === 'L' ? 'legendary' : card.rarity === 'C' ? 'reward' : 'rare',
+    });
     if (reduce) flip.setValue(1);
     else Animated.spring(flip, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }).start();
   };

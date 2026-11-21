@@ -4,6 +4,8 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 
+import { AnnouncementBanner } from '@/components/AnnouncementBanner';
+import { FeedbackProvider } from '@/state/feedback';
 import { GameProvider } from '@/state/game';
 import { AppThemeProvider, useAppTheme } from '@/theme/ThemeContext';
 
@@ -20,9 +22,11 @@ export default function RootLayout() {
 
   return (
     <AppThemeProvider>
-      <GameProvider>
-        <Root />
-      </GameProvider>
+      <FeedbackProvider>
+        <GameProvider>
+          <Root />
+        </GameProvider>
+      </FeedbackProvider>
     </AppThemeProvider>
   );
 }
@@ -36,6 +40,7 @@ function Root() {
         <Stack.Screen name="(tabs)" />
         <Stack.Screen name="station/[id]" />
       </Stack>
+      <AnnouncementBanner />
     </>
   );
 }
