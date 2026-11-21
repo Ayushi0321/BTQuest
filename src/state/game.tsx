@@ -5,7 +5,7 @@ import type { Rarity } from '@/components/StampCard';
 // The rider's collection and points, shared by every screen.
 // TODO (data dev): save this on the device / backend so it survives closing the app.
 
-export type OwnedCard = { uid: string; stationId: string; seed: number; rarity: Rarity };
+export type OwnedCard = { uid: string; stationId: string; seed: number; rarity: Rarity; place?: string; placeCode?: string };
 
 // Pull rates shown to riders in Rewards. Pulls only come from riding, never from payments.
 export const PULL_RATES: [Rarity, number][] = [['L', 0.01], ['E', 0.07], ['R', 0.22], ['C', 0.7]];
@@ -29,7 +29,7 @@ type Game = {
   points: number;
   artFound: Record<string, boolean>;
   /** Arriving at a station: adds +10 points and one new card. Returns the card and whether it's the first one there. */
-  pull: (stationId: string) => { card: OwnedCard; isNew: boolean };
+  pull: (stationId: string, place?: { name: string; code: string }) => { card: OwnedCard; isNew: boolean };
   findArt: (stationId: string) => void;
 };
 
@@ -42,10 +42,10 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [pulls, setPulls] = useState(0);
 
   const pull = useCallback(
-    (stationId: string) => {
+    (stationId: string, place?: { name: string; code: string }) => {
       // Demo: the first pull of a session is always Epic so the reveal can be shown off.
       const rarity: Rarity = pulls === 0 ? 'E' : rollRarity();
-      const card: OwnedCard = { uid: `${Date.now()}-${Math.random()}`, stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity };
+      const card: OwnedCard = { uid: `${Date.now()}-${Math.random()}`, stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity, place: place?.name, placeCode: place?.code };
       const isNew = !cards.some((c) => c.stationId === stationId);
       setCards((prev) => [...prev, card]);
       setPoints((p) => p + 10);

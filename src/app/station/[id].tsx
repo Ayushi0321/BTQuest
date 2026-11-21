@@ -31,7 +31,7 @@ export default function StationScreen() {
   return (
     <Screen title={s.name} right={back}>
       <View style={{ alignItems: 'center', gap: 8 }}>
-        {shown ? <StampCard stationId={s.id} seed={shown.seed} rarity={shown.rarity} width={250} /> : <Mascot stationId={s.id} size={150} locked frame />}
+        {shown ? <StampCard stationId={s.id} seed={shown.seed} rarity={shown.rarity} placeCode={shown.placeCode} width={250} /> : <Mascot stationId={s.id} size={150} locked frame />}
         <T size={28} weight="black">{shown ? s.mascot : 'Not met yet'}</T>
         <Pill label={mine.length ? `${mine.length} ${mine.length === 1 ? 'CARD' : 'CARDS'}` : 'NO CARDS YET'} bg={mine.length ? c.redTint : c.card2} fg={mine.length ? c.redInk : c.muted} style={{ alignSelf: 'center' }} />
       </View>
@@ -43,7 +43,7 @@ export default function StationScreen() {
             {mine.map((k) => (
               <Pressable key={k.uid} onPress={() => setSelected(k.uid)} accessibilityLabel="Show this card"
                 style={{ borderRadius: 12, borderWidth: 3, borderColor: shown?.uid === k.uid ? c.red : 'transparent' }}>
-                <StampCard stationId={s.id} seed={k.seed} rarity={k.rarity} width={96} compact />
+                <StampCard stationId={s.id} seed={k.seed} rarity={k.rarity} placeCode={k.placeCode} width={96} compact />
               </Pressable>
             ))}
           </View>

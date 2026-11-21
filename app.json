@@ -35,6 +35,13 @@
             "backgroundColor": "#121821"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "TQuest uses the camera to scan TQuest QR codes at stations and landmarks.",
+          "recordAudioAndroid": false
+        }
       ]
     ],
     "experiments": {

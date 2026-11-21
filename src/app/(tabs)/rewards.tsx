@@ -102,7 +102,7 @@ function Album() {
           }
           return (
             <Pressable key={s.id} onPress={open} accessibilityLabel={`${s.mascot}, ${mine.length} cards`} style={{ width: cardW, alignItems: 'center', gap: 4 }}>
-              <StampCard stationId={s.id} seed={best.seed} rarity={best.rarity} width={cardW} />
+              <StampCard stationId={s.id} seed={best.seed} rarity={best.rarity} placeCode={best.placeCode} width={cardW} />
               <T size={12} weight="heavy" color={c.muted}>{s.mascot} · {s.name} · ×{mine.length}</T>
             </Pressable>
           );
