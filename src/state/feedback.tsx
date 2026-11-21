@@ -34,6 +34,8 @@ type FeedbackValue = {
   settings: FeedbackSettings;
   /** Change one setting. Refuses to turn off the last of text / voice / vibration. Returns false if refused. */
   setSetting: <K extends keyof FeedbackSettings>(key: K, value: FeedbackSettings[K]) => boolean;
+  /** Set several at once. Ignored if it would turn off text, voice and vibration together. */
+  applySettings: (patch: Partial<FeedbackSettings>) => void;
   announce: (a: Announcement) => void;
   banner: Banner | null;
   dismissBanner: () => void;
@@ -103,12 +105,19 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     [settings, showBanner]
   );
 
+  const applySettings = useCallback((patch: Partial<FeedbackSettings>) => {
+    setSettings((prev) => {
+      const next = { ...prev, ...patch };
+      return next.text || next.voice || next.vibration ? next : prev;
+    });
+  }, []);
+
   const dismissBanner = useCallback(() => {
     if (hideTimer.current) clearTimeout(hideTimer.current);
     setBanner(null);
   }, []);
 
-  const value = useMemo(() => ({ settings, setSetting, announce, banner, dismissBanner, loaded }), [settings, setSetting, announce, banner, dismissBanner, loaded]);
+  const value = useMemo(() => ({ settings, setSetting, applySettings, announce, banner, dismissBanner, loaded }), [settings, setSetting, applySettings, announce, banner, dismissBanner, loaded]);
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

@@ -5,8 +5,9 @@ import { Pressable, Switch, Text, View } from 'react-native';
 import { getUsage, hasElevenLabs } from '@/api/elevenlabs';
 
 import { Mascot } from '@/components/Mascot';
-import { Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
+import { Button, Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
 import { buzz, type BuzzPattern } from '@/lib/haptics';
+import { useAuth } from '@/state/auth';
 import { useFeedback, type FeedbackSettings } from '@/state/feedback';
 import { font } from '@/theme/colors';
 import { useAppTheme, type ThemeMode } from '@/theme/ThemeContext';
@@ -23,6 +24,7 @@ const PATTERN_GUIDE: [BuzzPattern, string, string][] = [
 export default function You() {
   const { c, mode, setMode } = useAppTheme();
   const { settings, setSetting, announce } = useFeedback();
+  const { session, profile, signOut } = useAuth();
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   useFocusEffect(useCallback(() => { getUsage().then(setUsage); }, []));
 
@@ -58,10 +60,10 @@ export default function You() {
   return (
     <Screen title="You">
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
-        <Mascot stationId="KEN" size={72} frame />
-        <View>
-          <T size={24} weight="black">Hi, rider</T>
-          <T size={15} color={c.muted}>Favorite mascot: Ken · 12-day streak</T>
+        <Mascot stationId={profile?.fav_station ?? 'KEN'} size={72} frame />
+        <View style={{ flex: 1 }}>
+          <T size={24} weight="black">Hi, {profile?.username ?? 'rider'}</T>
+          <T size={15} color={c.muted}>{session?.user.email}</T>
         </View>
       </View>
 
@@ -125,6 +127,9 @@ export default function You() {
 
       <Kicker>Appearance</Kicker>
       {segmented<ThemeMode>([['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], mode, setMode)}
+
+      <Kicker>Account</Kicker>
+      <Button label="Log out" kind="plain" onPress={signOut} />
     </Screen>
   );
 }
