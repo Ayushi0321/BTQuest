@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, Text, useWindowDimensions, View } from 'react-native';
 
+import { ArtStamp } from '@/components/ArtStamp';
 import { Mascot } from '@/components/Mascot';
 import { StampCard, type Rarity } from '@/components/StampCard';
 import { Button, Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
@@ -115,16 +116,19 @@ function Album() {
 function Artwork() {
   const { c } = useAppTheme();
   const { artFound } = useGame();
+  const { width } = useWindowDimensions();
+  const w = Math.floor((Math.min(width, 520) - 36 - 14) / 2);
   return (
     <>
-      <T size={15} color={c.muted} style={{ lineHeight: 21 }}>Scan the QR code on an Arts on the T piece to get a stamp designed from that artwork, plus its story.</T>
-      {STATIONS.filter((s) => s.art).map((s) => (
-        <Card key={s.id} tint={artFound[s.id] ? c.goldTint : undefined}>
-          <Kicker color={c.goldInk}>{s.name}</Kicker>
-          <T size={19} weight="black">{artFound[s.id] ? s.art!.title : 'Hidden artwork'}</T>
-          <T size={14} color={c.muted}>{artFound[s.id] ? `by ${s.art!.artist} · found ★` : 'Hunt it to reveal · +50'}</T>
-        </Card>
-      ))}
+      <T size={15} color={c.muted} style={{ lineHeight: 21 }}>Scan an Arts on the T piece to unlock a stamp painted from that artwork. Tap a stamp and Questie tells you the story behind it.</T>
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 14 }}>
+        {STATIONS.filter((s) => s.art).map((s) => (
+          <Pressable key={s.id} onPress={() => router.push({ pathname: '/art/[id]', params: { id: s.id } })} accessibilityRole="button"
+            accessibilityLabel={artFound[s.id] ? `${s.art!.title}, hear its story` : `Hidden artwork at ${s.name}`}>
+            <ArtStamp stationId={s.id} width={w} locked={!artFound[s.id]} holeColor={c.bg} />
+          </Pressable>
+        ))}
+      </View>
       <Button label="Open the scanner" kind="gold" onPress={() => router.navigate('/scan')} />
     </>
   );

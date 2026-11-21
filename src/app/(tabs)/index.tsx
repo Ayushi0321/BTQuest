@@ -4,8 +4,10 @@ import { Pressable, View } from 'react-native';
 import Svg, { Circle, Path } from 'react-native-svg';
 
 import { askGemini } from '@/api/gemini';
+import { QUESTIE_PERSONA } from '@/api/questie';
 import { Mascot } from '@/components/Mascot';
 import { PullModal } from '@/components/PullModal';
+import { QuestieBubble } from '@/components/QuestieBubble';
 import { Button, Card, Kicker, Pill, ProgressBar, Screen, T } from '@/components/ui';
 import { STATIONS, stationById } from '@/data/stations';
 import { useFeedback } from '@/state/feedback';
@@ -61,12 +63,14 @@ export default function Ride() {
   async function askMascot() {
     setLoading(true);
     try {
-      setGreeting(await askGemini(
-        `You are ${next.mascot}, the cheerful mascot of ${next.name} station on the Boston Red Line. ` +
-        'A rider is arriving. Greet them in 2 short, friendly sentences and mention one thing about the area.'
-      ));
+      const line = await askGemini(
+        `The rider's train is heading into ${next.name} station on the Red Line. In 2 short spoken sentences, tell them one fun thing to see or do near ${next.name}, and remind them ${next.mascot}'s stamp is waiting there.`,
+        { system: QUESTIE_PERSONA, search: true, timeoutMs: 15000 }
+      );
+      setGreeting(line);
+      announce({ kind: 'info', banner: false, text: line });
     } catch (e) {
-      setGreeting('Error: ' + String(e));
+      setGreeting('I couldn’t reach my brain just now — try again in a moment!');
     }
     setLoading(false);
   }
@@ -167,8 +171,8 @@ export default function Ride() {
             <T size={13} color={c.muted}>Arrive to open a stamp pack</T>
           </View>
         </View>
-        {greeting ? <T size={16} style={{ marginTop: 12, lineHeight: 23 }}>{greeting}</T> : null}
-        <Button label={loading ? `Asking ${next.mascot}…` : `Ask ${next.mascot}`} kind="plain" onPress={askMascot} disabled={loading} style={{ marginTop: 12 }} />
+        {greeting || loading ? <View style={{ marginTop: 12 }}><QuestieBubble text={greeting} loading={loading} /></View> : null}
+        <Button label={loading ? 'Asking Questie…' : `Questie: what’s near ${next.name}?`} kind="plain" onPress={askMascot} disabled={loading} style={{ marginTop: 12 }} />
       </Card>
 
       <View>

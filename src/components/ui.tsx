@@ -1,21 +1,27 @@
+import { router } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, Text, View, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Questie } from '@/components/Questie';
+import { useQuestieSpeaking } from '@/lib/questieVoice';
 import { font } from '@/theme/colors';
 import { useAppTheme } from '@/theme/ThemeContext';
 
 // Shared building blocks in the chunky, Duolingo-like style of the design.
 
-export function Screen({ title, right, children, scroll = true }: { title?: string; right?: ReactNode; children: ReactNode; scroll?: boolean }) {
+export function Screen({ title, right, children, scroll = true, questie = true }: { title?: string; right?: ReactNode; children: ReactNode; scroll?: boolean; questie?: boolean }) {
   const { c } = useAppTheme();
   const body = <View style={{ padding: 18, gap: 14, paddingBottom: 40 }}>{children}</View>;
   return (
     <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: c.bg }}>
       {title ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingTop: 8 }}>
-          <Text style={{ fontFamily: font.black, fontSize: 28, color: c.text }}>{title}</Text>
-          {right}
+          <Text numberOfLines={1} style={{ flexShrink: 1, fontFamily: font.black, fontSize: 28, color: c.text }}>{title}</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            {questie ? <AskQuestieButton /> : null}
+            {right}
+          </View>
         </View>
       ) : null}
       {scroll ? <ScrollView showsVerticalScrollIndicator={false}>{body}</ScrollView> : body}
@@ -97,5 +103,24 @@ export function ProgressBar({ value, color, height = 14 }: { value: number; colo
     <View style={{ height, borderRadius: 99, backgroundColor: c.card2, overflow: 'hidden' }}>
       <View style={{ width: `${pct}%`, height: '100%', borderRadius: 99, backgroundColor: color ?? c.red }} />
     </View>
+  );
+}
+
+/** Small "Ask Questie" pill shown in every screen header; opens the voice guide. */
+export function AskQuestieButton() {
+  const { c } = useAppTheme();
+  const talking = useQuestieSpeaking();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel="Ask Questie, your voice guide"
+      onPress={() => router.push('/questie')}
+      style={({ pressed }) => ({
+        flexDirection: 'row', alignItems: 'center', gap: 4, height: 44, paddingLeft: 2, paddingRight: 12, borderRadius: 22,
+        backgroundColor: c.goldTint, borderWidth: 2, borderColor: c.gold, opacity: pressed ? 0.8 : 1,
+      })}>
+      <Questie size={38} talking={talking} />
+      <Text style={{ fontFamily: font.black, fontSize: 14, color: c.goldInk }}>Ask</Text>
+    </Pressable>
   );
 }

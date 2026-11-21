@@ -1,9 +1,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Speech from 'expo-speech';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { AccessibilityInfo } from 'react-native';
 
 import { buzz, type BuzzPattern } from '@/lib/haptics';
+import { questieSay } from '@/lib/questieVoice';
 
 // "Hear it your way": every announcement goes out on the channels the rider switched on —
 // on-screen text, voice, and vibration. Settings are saved on the phone.
@@ -76,12 +76,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       // Screen readers (VoiceOver / TalkBack) always get the text.
       AccessibilityInfo.announceForAccessibility(a.speak ?? a.text);
       if (settings.voice && a.voice !== false) {
-        try {
-          Speech.stop().catch(() => {});
-          Speech.speak(a.speak ?? a.text, { language: 'en-US', rate: settings.speechRate });
-        } catch {
-          // no speech engine on this device/browser — the other channels still work
-        }
+        // Questie's voice (ElevenLabs, falls back to the device voice)
+        questieSay(a.speak ?? a.text, settings.speechRate);
       }
       if (settings.vibration && a.buzz) buzz(a.buzz);
     },

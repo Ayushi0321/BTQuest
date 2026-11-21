@@ -40,7 +40,13 @@
         "expo-camera",
         {
           "cameraPermission": "TQuest uses the camera to scan TQuest QR codes at stations and landmarks.",
-          "recordAudioAndroid": false
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "TQuest uses the microphone so you can ask Questie questions out loud."
         }
       ]
     ],

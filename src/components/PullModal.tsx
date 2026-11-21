@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Modal, Pressable, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 
+import { cardStory, stampLine } from '@/api/questie';
 import { Mascot } from '@/components/Mascot';
+import { QuestieBubble } from '@/components/QuestieBubble';
 import { RARITY, StampCard } from '@/components/StampCard';
 import { Button } from '@/components/ui';
 import { stationById } from '@/data/stations';
@@ -29,6 +31,9 @@ export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Prop
   const [reduceSystem, setReduce] = useState(false);
   const { settings, announce } = useFeedback();
   const reduce = reduceSystem || settings.comfort;
+  const [line, setLine] = useState<string | undefined>();
+  const [thinking, setThinking] = useState(false);
+  const current = useRef<string | undefined>(undefined);
   const shake = useRef(new Animated.Value(0)).current;
   const flip = useRef(new Animated.Value(0)).current;
   const spin = useRef(new Animated.Value(0)).current;
@@ -40,6 +45,9 @@ export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Prop
   // reset whenever a new card arrives
   useEffect(() => {
     setOpen(false);
+    setLine(undefined);
+    setThinking(false);
+    current.current = card?.uid;
     flip.setValue(0);
   }, [card?.uid, flip]);
 
@@ -71,15 +79,33 @@ export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Prop
   const reveal = () => {
     setOpen(true);
     const word = { C: 'Common', R: 'Rare', E: 'Epic', L: 'Legendary' }[card.rarity];
-    announce({
-      kind: 'reward',
-      banner: false, // the reveal itself is the on-screen text
-      text: `${word} card: ${s.mascot}`,
-      speak: `${word} card! ${s.mascot} from ${card.place ?? s.name}.`,
-      buzz: card.rarity === 'L' ? 'legendary' : card.rarity === 'C' ? 'reward' : 'rare',
+    // instant: the rarity buzz (and screen readers get the result right away)
+    announce({ kind: 'reward', banner: false, voice: false, text: `${word} card: ${s.mascot}`, buzz: card.rarity === 'L' ? 'legendary' : card.rarity === 'C' ? 'reward' : 'rare' });
+    // then Questie celebrates with a Gemini-written line, in its own voice
+    setThinking(true);
+    const uid = card.uid;
+    stampLine(card).then((l) => {
+      if (current.current !== uid) return;
+      setThinking(false);
+      setLine(l);
+      announce({ kind: 'reward', banner: false, text: l });
     });
     if (reduce) flip.setValue(1);
     else Animated.spring(flip, { toValue: 1, friction: 6, tension: 60, useNativeDriver: true }).start();
+  };
+
+  // tap the card → Questie tells its one-line story
+  const tellStory = () => {
+    const uid = card.uid;
+    setThinking(true);
+    cardStory(card)
+      .then((story) => {
+        if (current.current !== uid) return;
+        setLine(story);
+        announce({ kind: 'reward', banner: false, text: story });
+      })
+      .catch(() => setLine('I lost my train of thought — tap the card again!'))
+      .finally(() => setThinking(false));
   };
 
   const R = RARITY[card.rarity];
@@ -130,8 +156,11 @@ export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Prop
                   { scale: flip.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
                 ],
               }}>
-              <StampCard stationId={card.stationId} seed={card.seed} rarity={card.rarity} placeCode={card.placeCode} width={250} />
+              <Pressable onPress={tellStory} accessibilityRole="button" accessibilityHint="Questie tells this card's story">
+                <StampCard stationId={card.stationId} seed={card.seed} rarity={card.rarity} placeCode={card.placeCode} width={230} />
+              </Pressable>
             </Animated.View>
+            <QuestieBubble text={line} loading={thinking} dark />
             <Text style={{ fontFamily: font.black, fontSize: 16, color: '#fff', textAlign: 'center' }}>
               {isNew ? `You met ${s.mascot}! ` : `A new look for ${s.mascot}! `}+10 points
             </Text>
