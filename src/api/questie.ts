@@ -59,7 +59,7 @@ export function artHistory(art: { title: string; artist: string; stationName: st
         parts: [{
           text: `Tell a rider the story behind the public artwork "${art.title}" by ${art.artist} at ${art.stationName} station on Boston's MBTA Red Line (part of the MBTA's Arts on the T program).
 Cover: who the artist is, when it was installed, what the piece is and how riders experience or interact with it, plus one fun detail.
-Write 4 to 6 short spoken sentences. Only state facts you can confirm from search results; if a detail such as the year isn't confirmed, leave it out rather than guess.`,
+Write 4 short spoken sentences, under 80 words in total. Only state facts you can confirm from search results; if a detail such as the year isn't confirmed, leave it out rather than guess.`,
         }],
       }],
       { system: QUESTIE_PERSONA, search: true, timeoutMs: 20000 }

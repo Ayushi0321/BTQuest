@@ -1,7 +1,11 @@
+import { useFocusEffect } from 'expo-router';
+import { useCallback, useState } from 'react';
 import { Pressable, Switch, Text, View } from 'react-native';
 
+import { getUsage, hasElevenLabs } from '@/api/elevenlabs';
+
 import { Mascot } from '@/components/Mascot';
-import { Card, Kicker, Screen, T } from '@/components/ui';
+import { Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
 import { buzz, type BuzzPattern } from '@/lib/haptics';
 import { useFeedback, type FeedbackSettings } from '@/state/feedback';
 import { font } from '@/theme/colors';
@@ -19,6 +23,8 @@ const PATTERN_GUIDE: [BuzzPattern, string, string][] = [
 export default function You() {
   const { c, mode, setMode } = useAppTheme();
   const { settings, setSetting, announce } = useFeedback();
+  const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
+  useFocusEffect(useCallback(() => { getUsage().then(setUsage); }, []));
 
   const segmented = <V extends string | number>(options: [V, string][], value: V, onChange: (v: V) => void) => (
     <View style={{ flexDirection: 'row', backgroundColor: c.card2, borderRadius: 16, padding: 4, gap: 4 }}>
@@ -73,6 +79,27 @@ export default function You() {
         <>
           <Kicker>Voice speed</Kicker>
           {segmented<number>([[0.8, 'Slow'], [1, 'Normal'], [1.15, 'Fast']], settings.speechRate, (v) => setSetting('speechRate', v))}
+          {hasElevenLabs() && (
+            <Card style={{ gap: 8 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <T size={16} weight="black">Questie’s premium voice</T>
+                  <T size={13} color={c.muted} style={{ lineHeight: 18 }}>ElevenLabs voice. Off = the phone’s voice (free). Turn off while testing, on for the demo.</T>
+                </View>
+                <Switch value={settings.premiumVoice} onValueChange={(v) => { setSetting('premiumVoice', v); }} trackColor={{ true: c.greenBtn, false: c.track }} thumbColor="#fff" accessibilityLabel="Questie's premium voice" />
+              </View>
+              {usage && (
+                <>
+                  <ProgressBar value={usage.used / usage.limit} color={usage.used >= usage.limit ? c.orange : c.gold} height={10} />
+                  <T size={12} color={c.muted}>
+                    {usage.used >= usage.limit
+                      ? `Today’s budget is used up (${usage.limit} characters) — Questie uses the phone voice until tomorrow.`
+                      : `${usage.used} / ${usage.limit} characters used today · replays are free`}
+                  </T>
+                </>
+              )}
+            </Card>
+          )}
         </>
       )}
 
