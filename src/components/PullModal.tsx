@@ -19,11 +19,12 @@ type Props = {
   card: OwnedCard | null;
   isNew: boolean;
   canHunt: boolean;
+  extra?: string; // e.g. "Artwork stamp unlocked · +50"
   onHunt: () => void;
   onClose: () => void;
 };
 
-export function PullModal({ card, isNew, canHunt, onHunt, onClose }: Props) {
+export function PullModal({ card, isNew, canHunt, extra, onHunt, onClose }: Props) {
   const [open, setOpen] = useState(false);
   const [reduce, setReduce] = useState(false);
   const shake = useRef(new Animated.Value(0)).current;
@@ -83,7 +84,7 @@ export function PullModal({ card, isNew, canHunt, onHunt, onClose }: Props) {
       <View style={{ flex: 1, backgroundColor: 'rgba(20,24,34,0.82)', alignItems: 'center', justifyContent: 'center', padding: 24, gap: 16, overflow: 'hidden' }}>
         {!open ? (
           <>
-            <Text style={{ fontFamily: font.black, fontSize: 13, letterSpacing: 1.4, color: '#FFF6EC' }}>STAMP PULL · {s.name.toUpperCase()}</Text>
+            <Text style={{ fontFamily: font.black, fontSize: 13, letterSpacing: 1.4, color: '#FFF6EC' }}>STAMP PULL · {(card.place ?? s.name).toUpperCase()}</Text>
             <Animated.View style={{ transform: [{ rotate: shake.interpolate({ inputRange: [-1, 1], outputRange: ['-4deg', '4deg'] }) }] }}>
               <Pressable
                 accessibilityRole="button"
@@ -120,11 +121,12 @@ export function PullModal({ card, isNew, canHunt, onHunt, onClose }: Props) {
                   { scale: flip.interpolate({ inputRange: [0, 1], outputRange: [0.7, 1] }) },
                 ],
               }}>
-              <StampCard stationId={card.stationId} seed={card.seed} rarity={card.rarity} width={250} />
+              <StampCard stationId={card.stationId} seed={card.seed} rarity={card.rarity} placeCode={card.placeCode} width={250} />
             </Animated.View>
             <Text style={{ fontFamily: font.black, fontSize: 16, color: '#fff', textAlign: 'center' }}>
               {isNew ? `You met ${s.mascot}! ` : `A new look for ${s.mascot}! `}+10 points
             </Text>
+            {extra ? <Text style={{ fontFamily: font.black, fontSize: 15, color: '#F2CF6B', textAlign: 'center' }}>{extra}</Text> : null}
             <View style={{ alignSelf: 'stretch', gap: 10 }}>
               {canHunt && <Button label="Hunt the artwork · +50" kind="gold" onPress={onHunt} />}
               <Button label="Add to my album" kind="green" onPress={onClose} />
