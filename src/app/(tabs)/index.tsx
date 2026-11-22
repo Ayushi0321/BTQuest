@@ -55,7 +55,7 @@ export default function Ride() {
   const { announce } = useFeedback();
   const { c } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const { guess, dismiss } = useRideDetector(!DEMO_MODE && loaded && (!checkin || finished));
+  const { guess, dismiss } = useRideDetector(loaded && (!checkin || finished));
 
   const openPicker = (initial?: { line: LineId; from?: string }) => {
     setPicker((p) => ({ key: p.key + 1, initial }));
