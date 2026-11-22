@@ -37,7 +37,7 @@ import { useAppTheme } from '@/theme/ThemeContext';
 // drives the same screen with a pretend train.
 // A ride starts with a check-in and ends when the train reaches your stop. Check in again to keep collecting.
 
-type Pulled = { card: OwnedCard; isNew: boolean };
+type Pulled = { card: OwnedCard; isNew: boolean; repeat: boolean };
 type Checkin = { line: LineId; from: string; to: string; at: number };
 
 const CHECKIN_KEY = 'tquest.checkin.v1';
@@ -253,6 +253,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
       <PullModal
         card={pulled?.card ?? null}
         isNew={pulled?.isNew ?? false}
+        repeat={pulled?.repeat}
         canHunt={!!pulled && !!stationById(pulled.card.stationId)?.art && !artFound[pulled.card.stationId]}
         onHunt={() => { setQueue([]); router.navigate('/scan'); }}
         onClose={() => {

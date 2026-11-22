@@ -8,7 +8,8 @@ import { useAuth } from '@/state/auth';
 
 // The rider's collection and points. Saved to their account; pulls made offline wait in a queue and sync later.
 
-export type OwnedCard = { uid: string; stationId: string; seed: number; rarity: Rarity; place?: string; placeCode?: string };
+// at: when it was pulled (ms). Older cached cards may not have it.
+export type OwnedCard = { uid: string; stationId: string; seed: number; rarity: Rarity; place?: string; placeCode?: string; at?: number };
 
 // Pull rates shown to riders in Rewards. Pulls only come from riding, never from payments.
 export const PULL_RATES: [Rarity, number][] = [['L', 0.01], ['E', 0.07], ['R', 0.22], ['C', 0.7]];
@@ -16,6 +17,7 @@ export const PULL_RATES: [Rarity, number][] = [['L', 0.01], ['E', 0.07], ['R', 0
 const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === '1';
 const PULL_POINTS = 10;
 const ART_POINTS = 50;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function rollRarity(): Rarity {
   let x = Math.random();
@@ -34,13 +36,14 @@ function uuid(): string {
 }
 
 type Stats = { points: number; week: number; month: number; streak: number; weekArt: number };
-type Op = { kind: 'pull'; card: OwnedCard } | { kind: 'art'; stationId: string };
+// repeat: same station's ride card already pulled in the last 24 h, so no points.
+type Op = { kind: 'pull'; card: OwnedCard; repeat?: boolean } | { kind: 'art'; stationId: string };
 type Saved = { cards: OwnedCard[]; artFound: Record<string, boolean>; stats: Stats; queue: Op[] };
 
 const EMPTY: Saved = { cards: [], artFound: {}, stats: { points: 0, week: 0, month: 0, streak: 0, weekArt: 0 }, queue: [] };
 const storageKey = (uid: string) => `tquest.game.v1.${uid}`;
 const opId = (op: Op) => (op.kind === 'pull' ? op.card.uid : 'art:' + op.stationId);
-const opPoints = (op: Op) => (op.kind === 'pull' ? PULL_POINTS : ART_POINTS);
+const opPoints = (op: Op) => (op.kind === 'pull' ? (op.repeat ? 0 : PULL_POINTS) : ART_POINTS);
 const isRetryable = (e: { code?: string; message: string }) => !e.code || e.code.startsWith('PGRST3') || /fetch|network|jwt/i.test(e.message);
 
 type Game = {
@@ -54,8 +57,11 @@ type Game = {
   artFound: Record<string, boolean>;
   /** Pulls waiting to reach the server. */
   pending: number;
-  /** Arriving at a station: adds +10 points and one new card. Returns the card and whether it's the first one there. */
-  pull: (stationId: string, place?: { name: string; code: string }, rarity?: Rarity) => { card: OwnedCard; isNew: boolean };
+  /**
+   * Arriving at a station: one new card, +10 points. Returns the card, whether it's the first one there,
+   * and repeat (ride card for this station already pulled in the last 24 h: album only, no points).
+   */
+  pull: (stationId: string, place?: { name: string; code: string }, rarity?: Rarity) => { card: OwnedCard; isNew: boolean; repeat: boolean };
   findArt: (stationId: string) => void;
 };
 
@@ -65,14 +71,14 @@ type ServerData = { cards: OwnedCard[]; art: string[]; stats: Stats };
 
 async function fetchServer(): Promise<ServerData | null> {
   const [c, a, s] = await Promise.all([
-    supabase.from('cards').select('uid, station_id, seed, rarity, place, place_code').order('created_at'),
+    supabase.from('cards').select('uid, station_id, seed, rarity, place, place_code, created_at').order('created_at'),
     supabase.from('art_finds').select('station_id'),
     supabase.rpc('my_stats'),
   ]);
   if (c.error || a.error || s.error) return null;
   const st = s.data as { points: number; week_points: number; month_points?: number; streak?: number; week_art?: number };
   return {
-    cards: c.data.map((r) => ({ uid: r.uid, stationId: r.station_id, seed: r.seed, rarity: r.rarity as Rarity, place: r.place ?? undefined, placeCode: r.place_code ?? undefined })),
+    cards: c.data.map((r) => ({ uid: r.uid, stationId: r.station_id, seed: r.seed, rarity: r.rarity as Rarity, place: r.place ?? undefined, placeCode: r.place_code ?? undefined, at: Date.parse(r.created_at) })),
     art: a.data.map((r) => r.station_id as string),
     stats: { points: st.points, week: st.week_points, month: st.month_points ?? 0, streak: st.streak ?? 0, weekArt: st.week_art ?? 0 },
   };
@@ -194,10 +200,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
     (stationId: string, place?: { name: string; code: string }, forcedRarity?: Rarity) => {
       const rarity: Rarity = forcedRarity ?? (DEMO_MODE && pulls.current === 0 ? 'E' : rollRarity());
       pulls.current += 1;
-      const card: OwnedCard = { uid: uuid(), stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity, place: place?.name, placeCode: place?.code };
-      const isNew = !latest.current.cards.some((c) => c.stationId === stationId);
-      update((d) => ({ ...d, cards: [...d.cards, card], queue: [...d.queue, { kind: 'pull', card }] }));
-      return { card, isNew };
+      const now = Date.now();
+      const card: OwnedCard = { uid: uuid(), stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity, place: place?.name, placeCode: place?.code, at: now };
+      const owned = latest.current.cards;
+      const isNew = !owned.some((c) => c.stationId === stationId);
+      // Mirrors pull_card on the server. Place and reward cards are not limited.
+      const repeat = !place && owned.some((c) => c.stationId === stationId && !c.placeCode && c.at != null && now - c.at < DAY_MS);
+      update((d) => ({ ...d, cards: [...d.cards, card], queue: [...d.queue, { kind: 'pull', card, repeat }] }));
+      return { card, isNew, repeat };
     },
     [update]
   );
