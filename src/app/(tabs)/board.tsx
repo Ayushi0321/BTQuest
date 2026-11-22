@@ -1,15 +1,11 @@
 import { useFocusEffect } from 'expo-router';
-import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Pressable, RefreshControl, Text, View } from 'react-native';
 
 import { Mascot } from '@/components/Mascot';
-import { Button, Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
+import { Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
 import { riderMascot } from '@/data/stations';
 import { supabase } from '@/lib/supabase';
-import { BotTransport } from '@/features/duel/botTransport';
-import { setActiveDuelTransport } from '@/features/duel/transportRegistry';
-import { useAuth } from '@/state/auth';
 import { useGame } from '@/state/game';
 import { font } from '@/theme/colors';
 import { useAppTheme } from '@/theme/ThemeContext';
@@ -27,25 +23,12 @@ async function fetchBoard(scope: Scope): Promise<Row[] | null> {
 
 export default function Board() {
   const { c } = useAppTheme();
-  const { cards, points, pending, weekArt } = useGame();
-  const { profile } = useAuth();
+  const { points, pending, weekArt } = useGame();
   const artLeft = Math.max(0, 3 - weekArt);
   const [scope, setScope] = useState<Scope>('week');
   const [boards, setBoards] = useState<Partial<Record<Scope, Row[]>>>({});
   const [failed, setFailed] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-
-  const practiceDuel = () => {
-    const bot = new BotTransport(cards);
-    const me = {
-      riderId: 'practice-me',
-      nickname: profile?.username ? `Swift ${profile.username} #42` : 'Swift Rider #42',
-      mascotStationId: profile?.fav_station ?? 'KEN',
-    };
-    setActiveDuelTransport(bot);
-    const matchId = bot.startPractice(me, cards);
-    router.push(`/duel/${matchId}` as never);
-  };
 
   const load = useCallback((s: Scope) => fetchBoard(s).then((r) => {
     setFailed(!r);
@@ -93,7 +76,6 @@ export default function Board() {
         <ProgressBar value={weekArt / 3} color={c.purple} />
       </Card>
 
-      <Button label="Practice duel vs bot" kind="gold" onPress={practiceDuel} />
 
       <View style={{ flexDirection: 'row', backgroundColor: c.card2, borderRadius: 16, padding: 4, gap: 4 }}>
         {([['week', 'This week'], ['all', 'All time']] as [Scope, string][]).map(([v, label]) => (
