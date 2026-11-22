@@ -1,9 +1,11 @@
 import { useLocalSearchParams, router } from 'expo-router';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, View } from 'react-native';
 
 import { PullModal } from '@/components/PullModal';
 import { Button, Screen } from '@/components/ui';
+import { finishCurrentMatch } from '@/duel/match';
+import { SupabaseDuelTransport } from '@/duel/supabaseTransport';
 import { ChargePhase, ClashArena, DuelResult, HandPicker, makeFighter, type ClashResult, type DuelCardView } from '@/duel/ui';
 import { BotTransport, ownedCardsToDuelCards } from '@/features/duel/botTransport';
 import { getElement, matchWinner } from '@/features/duel/rules';
@@ -69,21 +71,39 @@ function toCardView(card: DuelCard): DuelCardView {
 }
 
 export default function DuelMatch() {
-  const { matchId } = useLocalSearchParams<{ matchId: string }>();
+  // bot is set when we came from matchmaking: '1' = demo rider, '0' = real rider.
+  const params = useLocalSearchParams<{ matchId: string; bot?: string; opponent?: string; mascot?: string }>();
+  const { matchId } = params;
+  const matched = params.bot === '1' || params.bot === '0';
   const { profile } = useAuth();
   const { cards, pull } = useGame();
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const width = Math.max(320, screenWidth - 24);
 
-  const transport = useMemo(() => {
-    const active = getActiveDuelTransport();
-    if (active) return active;
-    const bot = new BotTransport(cards);
+  // Picked once per screen. duelId is what the transport knows the duel by (a bot uses its own practice id).
+  const [{ transport, duelId }] = useState(() => {
     const me = { riderId: 'practice-me', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' };
-    bot.startPractice(me, cards);
+    if (params.bot === '0') {
+      return { transport: new SupabaseDuelTransport(`rider-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`), duelId: matchId };
+    }
+    const active = params.bot === '1' ? null : getActiveDuelTransport();
+    if (active) return { transport: active, duelId: matchId };
+    const bot = new BotTransport(cards);
+    const opponent = params.bot === '1' ? { riderId: 'demo-rider', nickname: params.opponent ?? 'Rider', mascotStationId: params.mascot ?? 'KEN' } : undefined;
+    const id = bot.startPractice(me, cards, opponent);
     setActiveDuelTransport(bot);
-    return bot;
-  }, [cards, profile?.fav_station, profile?.username]);
+    return { transport: bot, duelId: id };
+  });
+  const isBot = transport instanceof BotTransport;
+
+  // Real match: join the duel channel the server's matchId points both phones to.
+  useEffect(() => {
+    if (!(transport instanceof SupabaseDuelTransport)) return;
+    transport.joinMatch(matchId, { riderId: 'me', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' });
+    return () => transport.leaveTrainRoom();
+    // Join once per screen; profile changes don't matter mid-duel.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transport, matchId]);
 
   const [round, setRound] = useState(1);
   const [hand, setHand] = useState<DuelCard[]>([]);
@@ -95,10 +115,22 @@ export default function DuelMatch() {
   const [phase, setPhase] = useState<'pick' | 'charge' | 'clash' | 'end'>('pick');
   const [pending, setPending] = useState<RoundResult | null>(null);
   const [rounds, setRounds] = useState<RoundResult[]>([]);
-  const [oppName, setOppName] = useState('Rider');
+  const [oppName, setOppName] = useState(params.opponent ?? 'Rider');
   const [reward, setReward] = useState<OwnedCard | null>(null);
   const sentPick = useRef(false);
   const sentCharge = useRef(false);
+
+  // Tell the matchmaker the duel is over (win, lose, opponent left, or closed early). Once.
+  const finished = useRef(false);
+  const finishMatch = useCallback(() => {
+    if (!matched || finished.current) return;
+    finished.current = true;
+    void finishCurrentMatch();
+  }, [matched]);
+  useEffect(() => {
+    if (phase === 'end') finishMatch();
+  }, [phase, finishMatch]);
+  useEffect(() => finishMatch, [finishMatch]);
 
   useEffect(() => {
     const source = cards.length >= 3 ? cards : [...cards, ...FALLBACK_CARDS];
@@ -128,8 +160,8 @@ export default function DuelMatch() {
       element: cardView.element,
     };
     setMyCard(card);
-    transport.sendPick(matchId, round, { ...card, uid: cardView.uid, power: 0 });
-    setOpponentReady(matchId.startsWith('practice-'));
+    transport.sendPick(duelId, round, { ...card, uid: cardView.uid, power: 0 });
+    setOpponentReady(isBot);
     setPhase('charge');
   };
 
@@ -137,7 +169,7 @@ export default function DuelMatch() {
     if (!myCard || sentCharge.current) return;
     sentCharge.current = true;
     setMyPower(power);
-    transport.sendPick(matchId, round, { ...myCard, uid: myCard.uid ?? `${myCard.stationId}-${myCard.seed}`, power });
+    transport.sendPick(duelId, round, { ...myCard, uid: myCard.uid ?? `${myCard.stationId}-${myCard.seed}`, power });
   };
 
   useEffect(() => {
@@ -184,7 +216,6 @@ export default function DuelMatch() {
   };
 
   const rematch = () => {
-    const isBot = matchId.startsWith('practice-');
     if (isBot) {
       const bot = new BotTransport(cards);
       const me = { riderId: 'local', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' };
@@ -196,7 +227,6 @@ export default function DuelMatch() {
     }
   };
 
-  const isBot = matchId.startsWith('practice-');
   const aWins = rounds.filter((item) => item.winner === 'a').length;
   const bWins = rounds.filter((item) => item.winner === 'b').length;
   const finalWinner = matchWinner(rounds);

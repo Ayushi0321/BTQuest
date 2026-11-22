@@ -16,13 +16,15 @@ import { AskQuestieButton, Button, Card, Kicker, Screen, T } from '@/components/
 import { lineById, lineColors, type LineId } from '@/data/lines';
 import { nearbyLine } from '@/data/offline';
 import { stationById } from '@/data/stations';
+import { DuelMatchmaker } from '@/duel/ui';
 import { useAlerts } from '@/hooks/useAlerts';
 import { useRideDetector } from '@/hooks/useRideDetector';
-import { useTrainRoom } from '@/hooks/useTrainRoom';
 import { useTrains } from '@/hooks/useTrains';
 import { DEMO_MODE, useTrip } from '@/hooks/useTrip';
 import { planTrip } from '@/lib/linePlan';
 import { clearRideProgress } from '@/lib/rideProgress';
+import { hasSupabase, supabase } from '@/lib/supabase';
+import { useAuth } from '@/state/auth';
 import { useFeedback } from '@/state/feedback';
 import { useGame, type OwnedCard } from '@/state/game';
 import { font } from '@/theme/colors';
@@ -42,6 +44,7 @@ type Checkin = { line: LineId; from: string; to: string; at: number };
 
 const CHECKIN_KEY = 'tquest.checkin.v1';
 const CHECKIN_TTL_MS = 3 * 60 * 60 * 1000;
+const DUEL_ME_KEY = 'tquest.duelMe.v1';
 
 const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const clock = (d?: Date) => (d ? `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}` : '');
@@ -158,8 +161,18 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
   const trip = useTrip(line.id, from, to, checkin.at);
   const { trains } = useTrains(line.id);
   const { alerts } = useAlerts(line.id);
-  const trainRoom = useTrainRoom(trip.trainId);
   const { pull, artFound, cards, points } = useGame();
+  const { session, profile } = useAuth();
+
+  // "Duel me" switch, remembered across rides. The server pairs riders on the same line.
+  const [duelMe, setDuelMe] = useState(false);
+  useEffect(() => {
+    AsyncStorage.getItem(DUEL_ME_KEY).then((v) => setDuelMe(v === '1')).catch(() => {});
+  }, []);
+  const toggleDuelMe = (on: boolean) => {
+    setDuelMe(on);
+    AsyncStorage.setItem(DUEL_ME_KEY, on ? '1' : '0').catch(() => {});
+  };
 
   useEffect(() => {
     if (trip.arrived && !finished) onFinished();
@@ -432,17 +445,24 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
               </Pressable>
             </View>
 
-            {trainRoom.riders.length > 0 ? (
-              <Card style={{ paddingVertical: 8 }}>
-                <Kicker>Riders on your train</Kicker>
-                {trainRoom.riders.map((rider) => (
-                  <View key={rider.riderId} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 }}>
-                    <T size={15} weight="black" style={{ flex: 1 }}>{rider.nickname}</T>
-                    <Button label="Invite" kind="gold" style={{ minHeight: 44, paddingHorizontal: 14 }} onPress={() => trainRoom.transport.sendInviteTo?.(rider.riderId)} />
-                  </View>
-                ))}
-              </Card>
-            ) : null}
+            {/* Replaces the manual "Riders on your train" invite list (useTrainRoom is kept, not used here). */}
+            <DuelMatchmaker
+              enabled={duelMe && !trip.arrived}
+              onToggle={toggleDuelMe}
+              line={line.id}
+              lineLabel={line.name}
+              trainId={trip.trainId ?? null}
+              nickname={profile?.username ?? 'Rider'}
+              mascot={profile?.fav_station ?? 'KEN'}
+              supabase={hasSupabase() ? supabase : null}
+              userId={session?.user.id ?? null}
+              onReady={(offer) =>
+                router.push({
+                  pathname: '/duel/[matchId]',
+                  params: { matchId: offer.id, opponent: offer.opponent.nickname, mascot: offer.opponent.mascot, bot: offer.isBot ? '1' : '0' },
+                })
+              }
+            />
 
             {bigAlert ? (
               <View style={{ backgroundColor: c.goldTint, borderRadius: 18, padding: 14, gap: 4 }}>

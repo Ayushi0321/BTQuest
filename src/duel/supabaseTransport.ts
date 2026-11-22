@@ -47,6 +47,9 @@ export class SupabaseDuelTransport implements DuelTransport {
   // for the previous removal, and a newer join/leave cancels an older join.
   private removing: Promise<unknown> = Promise.resolve();
   private joinToken = 0;
+  // Matchmade duel: set by joinMatch, the duel starts when the opponent shows up.
+  private matchId: string | null = null;
+  private matchTimer: ReturnType<typeof setTimeout> | null = null;
 
   constructor(private readonly sessionId: string) {}
 
@@ -56,17 +59,36 @@ export class SupabaseDuelTransport implements DuelTransport {
     this.trainId = trainId;
     this.me = me;
     const token = ++this.joinToken;
-    void this.openChannel(trainId, token);
+    void this.openChannel(`train:${trainId}`, token);
   }
 
-  private async openChannel(trainId: string, token: number): Promise<void> {
+  /**
+   * Duel picked by the server matchmaker: both riders join `duel:<matchId>`.
+   * No invite step. The duel starts once each sees the other; the lower session id plays side a.
+   */
+  joinMatch(matchId: string, me: PublicRider): void {
+    const room = `duel:${matchId}`;
+    if (this.trainId === room) return;
+    this.leaveTrainRoom();
+    this.trainId = room;
+    this.me = me;
+    this.matchId = matchId;
+    const token = ++this.joinToken;
+    void this.openChannel(room, token);
+    // Opponent never arrived (app closed, offline): end it like a leave.
+    this.matchTimer = setTimeout(() => {
+      if (this.matchId === matchId && !this.duel) for (const cb of this.opponentLeftListeners) cb();
+    }, 30_000);
+  }
+
+  private async openChannel(name: string, token: number): Promise<void> {
     await this.removing;
     // A leftover channel on this topic (e.g. from a previous transport instance).
-    const stale = supabase.getChannels().find((c) => c.topic === `realtime:train:${trainId}`);
+    const stale = supabase.getChannels().find((c) => c.topic === `realtime:${name}`);
     if (stale) await supabase.removeChannel(stale).catch(() => undefined);
     if (token !== this.joinToken) return;
 
-    this.channel = supabase.channel(`train:${trainId}`, {
+    this.channel = supabase.channel(name, {
       config: {
         presence: { key: this.sessionId },
         broadcast: { self: false },
@@ -109,6 +131,9 @@ export class SupabaseDuelTransport implements DuelTransport {
     }
     for (const timer of this.pickTimers.values()) clearTimeout(timer);
     this.pickTimers.clear();
+    if (this.matchTimer) clearTimeout(this.matchTimer);
+    this.matchTimer = null;
+    this.matchId = null;
     this.channel = null;
     this.trainId = null;
     this.opponent = null;
@@ -215,6 +240,14 @@ export class SupabaseDuelTransport implements DuelTransport {
       });
     }
     for (const cb of this.ridersListeners) cb(riders);
+
+    if (this.matchId && !this.duel && riders[0]) {
+      const opponent = riders[0];
+      this.localSide = this.sessionId < opponent.riderId ? 'a' : 'b';
+      if (this.matchTimer) clearTimeout(this.matchTimer);
+      this.matchTimer = null;
+      this.startDuel(this.matchId, opponent);
+    }
   }
 
   private onInvitePayload(payload: RoomPayload): void {
