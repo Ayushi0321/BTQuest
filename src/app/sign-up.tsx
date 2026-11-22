@@ -26,7 +26,7 @@ export default function SignUp() {
       footer={
         <>
           <Button label={busy ? 'Creating…' : 'Create account'} kind="green" disabled={busy || !username || !email || password.length < 6} onPress={submit} />
-          <Button label="I already have an account" kind="plain" onPress={() => router.replace('/log-in')} />
+          <Button label="I already have an account" kind="plain" onPress={() => router.replace('/log-in' as never)} />
         </>
       }>
       <QuestieBubble text="Pick a name other riders will see on the board." />

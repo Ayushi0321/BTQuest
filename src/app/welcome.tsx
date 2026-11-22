@@ -13,8 +13,8 @@ export default function Welcome() {
       back={false}
       footer={
         <>
-          <Button label="Get started" kind="green" onPress={() => router.push('/sign-up')} />
-          <Button label="I already have an account" kind="plain" onPress={() => router.push('/log-in')} />
+          <Button label="Get started" kind="green" onPress={() => router.push('/sign-up' as never)} />
+          <Button label="I already have an account" kind="plain" onPress={() => router.push('/log-in' as never)} />
         </>
       }>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>

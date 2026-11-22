@@ -55,7 +55,7 @@ type Game = {
   /** Pulls waiting to reach the server. */
   pending: number;
   /** Arriving at a station: adds +10 points and one new card. Returns the card and whether it's the first one there. */
-  pull: (stationId: string, place?: { name: string; code: string }) => { card: OwnedCard; isNew: boolean };
+  pull: (stationId: string, place?: { name: string; code: string }, rarity?: Rarity) => { card: OwnedCard; isNew: boolean };
   findArt: (stationId: string) => void;
 };
 
@@ -191,8 +191,8 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, [refresh]);
 
   const pull = useCallback(
-    (stationId: string, place?: { name: string; code: string }) => {
-      const rarity: Rarity = DEMO_MODE && pulls.current === 0 ? 'E' : rollRarity();
+    (stationId: string, place?: { name: string; code: string }, forcedRarity?: Rarity) => {
+      const rarity: Rarity = forcedRarity ?? (DEMO_MODE && pulls.current === 0 ? 'E' : rollRarity());
       pulls.current += 1;
       const card: OwnedCard = { uid: uuid(), stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity, place: place?.name, placeCode: place?.code };
       const isNew = !latest.current.cards.some((c) => c.stationId === stationId);

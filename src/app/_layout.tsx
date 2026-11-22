@@ -48,6 +48,7 @@ function Root() {
           <Stack.Screen name="(tabs)" />
           <Stack.Screen name="station/[id]" />
           <Stack.Screen name="art/[id]" />
+          <Stack.Screen name="duel/[matchId]" options={{ presentation: 'modal' }} />
           <Stack.Screen name="questie" options={{ presentation: 'modal' }} />
         </Stack.Protected>
         <Stack.Protected guard={signedIn && !onboarded}>
