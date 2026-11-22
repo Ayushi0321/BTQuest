@@ -11,6 +11,7 @@ import { AppState } from 'react-native';
 
 import { getTrains, type Train } from '@/api/mbta';
 import { LINES, type LineId } from '@/data/lines';
+import { DEMO_MODE } from '@/hooks/useTrip';
 import { distanceMeters } from '@/lib/linePlan';
 
 const CHECK_MS = 15_000;
@@ -21,6 +22,14 @@ const FIX_MAX_AGE_MS = 60_000;
 const SNOOZE_MS = 15 * 60_000;
 
 export type RideGuess = { line: LineId; stationId: string; train: Train };
+
+// Demo mode has no location or live trains, so the alert fires on a timer with a pretend B train.
+const DEMO_DELAY_MS = 8_000;
+const DEMO_GUESS: RideGuess = {
+  line: 'Green-B',
+  stationId: 'BUC',
+  train: { vehicleId: 'DEMO', lat: 42.35008, lng: -71.10687, bearing: 270, direction: 0, status: 'STOPPED_AT', stationId: 'BUC', headsign: 'Boston College' },
+};
 
 type Fix = { lat: number; lng: number; t: number };
 
@@ -35,6 +44,10 @@ export function useRideDetector(enabled: boolean): { guess: RideGuess | null; di
 
   useEffect(() => {
     if (!enabled) return;
+    if (DEMO_MODE) {
+      const t = setTimeout(() => setGuess(DEMO_GUESS), DEMO_DELAY_MS);
+      return () => clearTimeout(t);
+    }
     let cancelled = false;
     let sub: Location.LocationSubscription | undefined;
     let fix: Fix | null = null;
