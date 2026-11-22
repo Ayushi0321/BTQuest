@@ -26,11 +26,18 @@ type Pose = 'wave' | 'cheer' | 'jump' | 'hold' | 'sleep' | 'dance' | 'point' | '
 type Weather = 'leaves' | 'snow' | 'rain' | 'stars' | 'petals' | 'none';
 type Fx = 'none' | 'rainbow' | 'fireworks' | 'golden';
 // Landmark scenes for QR spots (South Station uses its station scene).
-type Landmark = 'mitdome' | 'faneuil' | 'yard' | 'common' | 'esplanade' | 'kendallband' | 'glovecycle';
+type Landmark =
+  | 'mitdome' | 'faneuil' | 'yard' | 'common' | 'esplanade' | 'kendallband' | 'glovecycle'
+  // Green Line B
+  | 'cityhall' | 'garden' | 'library' | 'fenway' | 'gasson';
 const LANDMARK_BY_CODE: Record<string, Landmark> = {
   'MIT-DOME': 'mitdome', 'FANEUIL-HALL': 'faneuil', 'HARVARD-YARD': 'yard', 'BOSTON-COMMON': 'common',
   ESPLANADE: 'esplanade', 'ART-KENDALL-BAND': 'kendallband', 'ART-GLOVE-CYCLE': 'glovecycle',
+  'CITY-HALL-PLAZA': 'cityhall', 'PUBLIC-GARDEN': 'garden', 'BOSTON-PUBLIC-LIBRARY': 'library',
+  'FENWAY-PARK': 'fenway', 'BC-GASSON-HALL': 'gasson',
 };
+/** Landmarks that stand on pavement rather than grass. */
+const PAVED: Landmark[] = ['faneuil', 'mitdome', 'cityhall', 'library'];
 const INDOOR: Landmark[] = ['kendallband', 'glovecycle'];
 type Prop = 'cup' | 'book' | 'pie' | 'camera' | 'lantern' | 'umbrella' | 'none';
 
@@ -167,7 +174,7 @@ function paint(stationId: string, seed: number, rarity: Rarity, placeCode?: stri
   const greens = d.time === 'night' ? ['#2F5A44', '#3B6B50', '#284C3B'] : ['#6FAF6B', '#88BE6E', '#5E9C64'];
   const trees = d.weather === 'leaves' ? autumn : greens;
   const lm = d.landmark;
-  const groundFill = d.indoor ? (d.time === 'night' ? '#4A4F66' : '#BDB6AA') : lm === 'faneuil' || lm === 'mitdome' ? (d.time === 'night' ? '#4A4F66' : '#CFC6B8') : lm ? p.grass : d.scene === 'shore' ? (d.time === 'night' ? '#6E6650' : '#E6D3A3') : ['city', 'tower', 'theatre'].includes(d.scene) ? (d.time === 'night' ? '#4A4F66' : '#CFC6B8') : p.ground;
+  const groundFill = d.indoor ? (d.time === 'night' ? '#4A4F66' : '#BDB6AA') : lm === 'cityhall' ? (d.time === 'night' ? '#5A4048' : '#C98A6E') : lm && PAVED.includes(lm) ? (d.time === 'night' ? '#4A4F66' : '#CFC6B8') : lm ? p.grass : d.scene === 'shore' ? (d.time === 'night' ? '#6E6650' : '#E6D3A3') : ['city', 'tower', 'theatre'].includes(d.scene) ? (d.time === 'night' ? '#4A4F66' : '#CFC6B8') : p.ground;
 
   // Draw a shape twice with different wobble: a solid coat and a lighter, slightly shifted wash.
   let key = 0;
@@ -252,6 +259,110 @@ function paint(stationId: string, seed: number, rarity: Rarity, placeCode?: stri
       // Hatch Shell
       sceneEls.push(coat(ellipsePts(36, 156, 34, 44, 18).filter((pt) => pt[1] <= 156), '#F4EBDD', stroke));
       sceneEls.push(<Path key={key++} d="M10 156A26 34 0 0 1 62 156M18 156A18 24 0 0 1 54 156" stroke={p.ink} strokeWidth={1.4} fill="none" opacity={0.5} />);
+    } else if (l === 'cityhall') {
+      // Boston City Hall: a concrete "upside-down" building over a brick plaza
+      const conc = night ? '#5E6478' : '#CFC7BA';
+      const conc2 = night ? '#4C5266' : '#B9B0A2';
+      sceneEls.push(coat(rrectPts(4, 52, 192, 24, 1), conc, stroke));
+      for (let x = 10; x < 192; x += 7) sceneEls.push(<Rect key={key++} x={x} y={56} width={3} height={17} fill={conc2} opacity={0.9} />);
+      sceneEls.push(coat(rrectPts(16, 76, 168, 20, 1), conc, stroke));
+      for (let x = 22; x < 180; x += 12) sceneEls.push(<Rect key={key++} x={x} y={80} width={8} height={12} rx={1} fill={night ? p.win : '#8FA3B5'} opacity={0.85} />);
+      sceneEls.push(coat(rrectPts(28, 96, 144, 48, 1), conc2, { ...stroke, op: 0.95 }));
+      for (let x = 34; x < 168; x += 16) sceneEls.push(<Rect key={key++} x={x} y={96} width={7} height={48} fill={conc} stroke={p.ink} strokeWidth={0.6} strokeOpacity={0.4} />);
+      // flagpoles with plain pennants
+      for (const [fx2, col] of [[10, '#E26B60'], [190, '#5A80C6']] as [number, string][]) {
+        sceneEls.push(brush(fx2, 150, fx2, 84, p.ink, 1.6));
+        sceneEls.push(coat([[fx2, 86], [fx2 + 16, 90], [fx2, 96]], col, { amp: 0.4 }));
+      }
+      // brick plaza courses
+      for (const y of [156, 166, 178]) sceneEls.push(brush(-6, y, 206, y + 2, night ? '#3E2E34' : '#A86A52', 1.2, 0.6));
+    } else if (l === 'garden') {
+      // Public Garden: willows, the lagoon footbridge and a swan boat
+      sceneEls.push(coat(hillPts(rng, 128, 4, 140), p.grass));
+      sceneEls.push(coat(ellipsePts(100, 150, 118, 26, 22), p.water, { amp: 1.2 }));
+      for (const [x, y, l2] of [[60, 146, 26], [120, 156, 30], [30, 160, 20]]) sceneEls.push(brush(x, y, x + l2, y, '#fff', 2, 0.5));
+      // footbridge
+      sceneEls.push(<Path key={key++} d="M18 124Q100 104 182 124" stroke={night ? '#9AA6B2' : '#F4EBDD'} strokeWidth={5} fill="none" />);
+      sceneEls.push(<Path key={key++} d="M18 118Q100 98 182 118" stroke={p.ink} strokeWidth={1.4} fill="none" opacity={0.6} />);
+      for (let x = 28; x <= 172; x += 16) sceneEls.push(brush(x, 116 - Math.sin(((x - 18) / 164) * Math.PI) * 14, x, 124 - Math.sin(((x - 18) / 164) * Math.PI) * 14, p.ink, 1, 0.5));
+      // weeping willows
+      for (const [tx, ty] of [[20, 86], [184, 80]] as [number, number][]) {
+        sceneEls.push(coat(rrectPts(tx - 3, ty, 6, 50, 2), p.trunk, { amp: 0.6 }));
+        sceneEls.push(coat(ellipsePts(tx, ty, 24, 18), trees[1], { op: 0.9 }));
+        for (let i = -20; i <= 20; i += 5) sceneEls.push(<Path key={key++} d={`M${tx + i} ${ty + 4}q${i / 6} 18 ${i / 4} ${30 + (Math.abs(i) % 9)}`} stroke={trees[i % 2 ? 0 : 2] ?? trees[0]} strokeWidth={2.4} strokeLinecap="round" fill="none" opacity={0.85} />);
+      }
+      // swan boat (left, on the water)
+      sceneEls.push(coat(rrectPts(10, 150, 44, 8, 3), '#F4EBDD', { ...stroke, amp: 0.5 }));
+      for (const x of [16, 26, 36]) sceneEls.push(<Rect key={key++} x={x} y={145} width={6} height={5} rx={1} fill="#5A80C6" />);
+      sceneEls.push(coat([[44, 152], [56, 150], [60, 138], [56, 128], [62, 124], [64, 132], [60, 148], [52, 156]], '#FFFFFF', { stroke: p.ink, sw: 1, amp: 0.4 }));
+      sceneEls.push(<Path key={key++} d="M62 124l4 1.5-3 1.2z" fill="#EE9A45" />);
+      // two little ducks
+      for (const [dx2, dy2] of [[150, 160], [166, 164]] as [number, number][]) {
+        sceneEls.push(<Ellipse key={key++} cx={dx2} cy={dy2} rx={5} ry={3} fill="#E6C26A" />);
+        sceneEls.push(<Circle key={key++} cx={dx2 + 4} cy={dy2 - 3} r={2.4} fill="#E6C26A" />);
+        sceneEls.push(<Path key={key++} d={`M${dx2 + 6} ${dy2 - 3}l2.5 .8-2.5 .8z`} fill="#EE9A45" />);
+      }
+    } else if (l === 'library') {
+      // Boston Public Library (McKim building): granite front, arched windows, lanterns
+      const stone = night ? '#5A5F78' : '#E3D7C3';
+      sceneEls.push(coat(rrectPts(2, 60, 196, 10, 1), night ? '#6A4048' : '#B5654A', stroke));
+      sceneEls.push(coat(rrectPts(4, 70, 192, 84, 1), stone, stroke));
+      sceneEls.push(brush(4, 78, 196, 78, p.ink, 1, 0.4));
+      for (let i = 0; i < 9; i++) {
+        const x = 12 + i * 20.5;
+        sceneEls.push(<Rect key={key++} x={x} y={84} width={12} height={30} rx={6} fill={night ? p.win : '#7E8FA6'} stroke={p.ink} strokeWidth={0.8} strokeOpacity={0.5} />);
+        sceneEls.push(brush(x + 6, 86, x + 6, 112, '#FFFFFF', 0.8, 0.35));
+      }
+      sceneEls.push(brush(4, 120, 196, 120, p.ink, 1.2, 0.45));
+      for (const x of [72, 94, 116]) sceneEls.push(<Rect key={key++} x={x} y={126} width={14} height={28} rx={7} fill={night ? '#2B3440' : '#4E5866'} />);
+      for (const y of [156, 161, 166]) sceneEls.push(brush(30, y, 170, y, p.ink, 1, 0.35));
+      for (const lx of [22, 178]) {
+        sceneEls.push(brush(lx, 170, lx, 128, '#2B3440', 2));
+        sceneEls.push(coat(rrectPts(lx - 6, 116, 12, 14, 2), night ? '#FFD36B' : '#F6E7B8', { stroke: '#2B3440', sw: 1.4, amp: 0.4 }));
+        if (night) sceneEls.push(<Circle key={key++} cx={lx} cy={123} r={14} fill="#FFD36B" opacity={0.25} />);
+      }
+    } else if (l === 'fenway') {
+      // Fenway Park: light towers, the tall green wall with a hand-turned scoreboard, the warning track
+      const wallC = night ? '#244F3A' : '#2E6B4A';
+      for (const tx of [16, 184]) {
+        sceneEls.push(brush(tx, 108, tx, 30, p.ink, 2.4));
+        sceneEls.push(coat(rrectPts(tx - 12, 20, 24, 12, 2), night ? '#FFF3C4' : '#E8EEF2', { stroke: p.ink, sw: 1.2, amp: 0.4 }));
+        for (let i = 0; i < 4; i++) sceneEls.push(<Circle key={key++} cx={tx - 8 + i * 5.4} cy={26} r={1.6} fill={night ? '#FFD36B' : '#BFD3E0'} />);
+        if (night) sceneEls.push(<Path key={key++} d={`M${tx - 12} 32L${tx - 40} 110L${tx + 40} 110L${tx + 12} 32Z`} fill="#FFF3C4" opacity={0.12} />);
+      }
+      sceneEls.push(coat(rrectPts(-6, 66, 212, 66, 1), wallC, { stroke: p.ink, sw: 1.2, amp: 0.8 }));
+      sceneEls.push(brush(-6, 66, 206, 66, '#1F4D35', 3));
+      // scoreboard: rows of little panels, a few lit
+      for (let r = 0; r < 3; r++) for (let c = 0; c < 9; c++) {
+        const lit = (r * 9 + c) % 4 === 1;
+        sceneEls.push(<Rect key={key++} x={40 + c * 14} y={74 + r * 12} width={10} height={9} rx={1} fill={lit ? '#F4EBDD' : '#1F4D35'} opacity={0.95} />);
+      }
+      // warning track + mown stripes
+      sceneEls.push(coat(rrectPts(-6, 132, 212, 10, 1), night ? '#6E5A48' : '#C99A6A', { amp: 0.6 }));
+      for (const y of [152, 166, 180]) sceneEls.push(brush(-6, y, 206, y, '#FFFFFF', 5, 0.12));
+      // a baseball flying over the wall
+      sceneEls.push(<Path key={key++} d="M150 50q14-14 30-20" stroke="#FFFFFF" strokeWidth={2} strokeDasharray="3 4" fill="none" opacity={0.8} />);
+      sceneEls.push(<G key={key++}><Circle cx={182} cy={29} r={5} fill="#FFFFFF" stroke={p.ink} strokeWidth={0.8} /><Path d="M179 26q2 3 0 6M185 26q-2 3 0 6" stroke="#E26B60" strokeWidth={0.9} fill="none" /></G>);
+    } else if (l === 'gasson') {
+      // Boston College, Gasson Hall: a gothic stone tower on the Heights
+      const stone = night ? '#5E6070' : '#C9C0B0';
+      const stone2 = night ? '#4E5060' : '#B3A995';
+      sceneEls.push(coat(rrectPts(-6, 96, 212, 60, 1), stone2, stroke));
+      for (let x = 4; x < 200; x += 18) sceneEls.push(<Rect key={key++} x={x} y={106} width={8} height={18} rx={4} fill={night ? p.win : '#7E8FA6'} opacity={0.9} />);
+      sceneEls.push(coat(rrectPts(80, 28, 40, 80, 1), stone, stroke));
+      for (let i = 0; i < 4; i++) sceneEls.push(<Rect key={key++} x={82 + i * 10} y={22} width={6} height={8} fill={stone} stroke={p.ink} strokeWidth={0.8} />);
+      for (const px of [80, 120]) sceneEls.push(coat([[px - 4, 30], [px, 8], [px + 4, 30]], stone2, { stroke: p.ink, sw: 1, amp: 0.3 }));
+      sceneEls.push(<Path key={key++} d="M92 66V48Q100 36 108 48V66Z" fill={night ? p.win : '#7E8FA6'} stroke={p.ink} strokeWidth={0.8} />);
+      sceneEls.push(brush(100, 40, 100, 66, p.ink, 0.8, 0.5));
+      sceneEls.push(<Path key={key++} d="M88 92V80Q100 70 112 80V92Z" fill={night ? p.win : '#7E8FA6'} opacity={0.9} />);
+      // maroon and gold banners
+      sceneEls.push(coat([[72, 96], [80, 96], [80, 124], [76, 120], [72, 124]], '#8A2432', { amp: 0.3 }));
+      sceneEls.push(coat([[120, 96], [128, 96], [128, 124], [124, 120], [120, 124]], '#C9A23A', { amp: 0.3 }));
+      for (const [tx, ty, r] of [[16, 104, 22], [186, 100, 24]] as [number, number, number][]) {
+        sceneEls.push(coat(rrectPts(tx - 3, ty + 6, 6, 40, 2), p.trunk, { amp: 0.6 }));
+        sceneEls.push(coat(ellipsePts(tx, ty, r, r), trees[0], { op: 0.92 }));
+        sceneEls.push(coat(ellipsePts(tx + r * 0.4, ty + r * 0.3, r * 0.6, r * 0.55), trees[2] ?? trees[1], { op: 0.85 }));
+      }
     } else if (l === 'kendallband' || l === 'glovecycle') {
       const wall = night ? '#3E4A6E' : l === 'kendallband' ? '#E8E1D3' : '#D9D2C5';
       sceneEls.push(<Rect key={key++} x={0} y={0} width={200} height={175} fill={wall} />);

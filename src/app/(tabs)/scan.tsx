@@ -45,8 +45,8 @@ export default function Scan() {
     busy.current = true;
     const target = parseQr(data);
     if (!target) {
-      setNotice('That’s not a TQuest code. Look for the red TQuest sign.');
-      announce({ kind: 'error', text: 'That’s not a TQuest code', speak: 'That’s not a TQuest code. Look for the red TQuest sign.', buzz: 'error', banner: false });
+      setNotice('That’s not a TQuest code. Look for a TQuest sign.');
+      announce({ kind: 'error', text: 'That’s not a TQuest code', speak: 'That’s not a TQuest code. Look for a TQuest sign.', buzz: 'error', banner: false });
       setTimeout(() => { busy.current = false; setNotice(''); }, 2000);
       return;
     }

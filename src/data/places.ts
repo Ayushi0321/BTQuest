@@ -5,7 +5,7 @@ export type QrTarget = {
   code: string;
   kind: 'place' | 'art';
   name: string;
-  stationId: string; // the Red Line station it belongs to (sets the mascot and scene)
+  stationId: string; // the station it belongs to (sets the mascot and scene)
   blurb: string;
 };
 
@@ -18,6 +18,12 @@ export const QR_TARGETS: QrTarget[] = [
   { code: 'BOSTON-COMMON', kind: 'place', name: 'Boston Common', stationId: 'PRK', blurb: 'Boston’s public park since 1634.' },
   { code: 'FANEUIL-HALL', kind: 'place', name: 'Faneuil Hall', stationId: 'DTX', blurb: 'Marketplace and meeting hall since 1742.' },
   { code: 'SOUTH-STATION', kind: 'place', name: 'South Station', stationId: 'SST', blurb: 'Boston’s big rail and bus hub.' },
+  // Green Line B
+  { code: 'CITY-HALL-PLAZA', kind: 'place', name: 'City Hall Plaza', stationId: 'GOV', blurb: 'The big brick plaza in front of Boston City Hall.' },
+  { code: 'PUBLIC-GARDEN', kind: 'place', name: 'Public Garden', stationId: 'ARL', blurb: 'Willows, the lagoon bridge and the swan boats.' },
+  { code: 'BOSTON-PUBLIC-LIBRARY', kind: 'place', name: 'Boston Public Library', stationId: 'COP', blurb: 'The grand granite library on Copley Square.' },
+  { code: 'FENWAY-PARK', kind: 'place', name: 'Fenway Park', stationId: 'KMR', blurb: 'Boston’s historic ballpark and its tall green wall.' },
+  { code: 'BC-GASSON-HALL', kind: 'place', name: 'Gasson Hall', stationId: 'BCL', blurb: 'Boston College’s gothic tower on the Heights.' },
   { code: 'ART-KENDALL-BAND', kind: 'art', name: 'Kendall Band', stationId: 'KEN', blurb: 'Musical sculptures between the tracks.' },
   { code: 'ART-GLOVE-CYCLE', kind: 'art', name: 'Glove Cycle', stationId: 'POR', blurb: 'Bronze gloves along the escalators.' },
 ];
