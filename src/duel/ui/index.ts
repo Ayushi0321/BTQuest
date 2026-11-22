@@ -3,10 +3,14 @@
 //   charge → <ChargePhase>   (Sun: Stop at noon · Storm: Connect the dots · Moon: Star catcher)
 //   clash  → <ClashArena>    (use makeFighter() to build both sides from the two picks + powers)
 //   end    → <DuelResult>
+//   invite → <DuelInvite mode="incoming" | "outgoing">
+//   auto   → <DuelMatchmaker> ("Duel me" pill + Match found popup; see src/duel/match)
 // Try them all at /duel-lab.
 
 export { ChargePhase } from './ChargePhase';
 export { ClashArena } from './ClashArena';
+export { DuelInvite } from './DuelInvite';
+export { DuelMatchmaker, MatchPill } from './DuelMatchmaker';
 export { DuelResult } from './DuelResult';
 export { HandPicker } from './HandPicker';
 export { CardBack, ELEMENT, ElementBadge, PaintedButton, PaintedPanel } from './paintKit';

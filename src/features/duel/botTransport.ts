@@ -192,8 +192,10 @@ export class BotTransport implements DuelTransport {
     return () => this.duelStartedListeners.delete(cb);
   }
 
-  startPractice(me: PublicRider, playerAlbum: OwnedCard[]): string {
+  /** opponent: show this rider instead of a random bot (demo matchmaking riders). */
+  startPractice(me: PublicRider, playerAlbum: OwnedCard[], opponent?: PublicRider): string {
     this.me = me;
+    if (opponent) this.bot = opponent;
     this.trainId = 'practice';
     this.duelId = 'practice-' + Date.now();
     this.playerHand = ownedCardsToDuelCards(playerAlbum).slice(0, 18);
