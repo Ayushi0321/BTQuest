@@ -1,4 +1,4 @@
-// Full-screen live Red Line map for the Ride tab. Needs no API key in Expo Go.
+// Full-screen live map of the rider's line for the Ride tab. Needs no API key in Expo Go.
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import MapView, { Marker, Polyline, type LatLng, type MapStyleElement } from 'react-native-maps';
@@ -6,14 +6,15 @@ import Svg, { Circle, Path, Rect } from 'react-native-svg';
 
 import type { Train } from '@/api/mbta';
 import { Mascot } from '@/components/Mascot';
-import { RED_LINE_SHAPE, STATION_COORDS } from '@/data/redLineMap';
-import { STATIONS } from '@/data/stations';
+import { COORDS, lineColors, type Line } from '@/data/lines';
+import { stationById } from '@/data/stations';
 import { font, type Palette } from '@/theme/colors';
 import { useAppTheme } from '@/theme/ThemeContext';
 
 type Callout = { stationId: string; title: string; subtitle: string; onPress?: () => void };
 
 type Props = {
+  line: Line;
   stops: string[];
   reachedIdx: number;
   nextStopId?: string;
@@ -29,20 +30,21 @@ type Props = {
 const LABEL_W = 150;
 
 export function RideMap({
-  stops, reachedIdx, nextStopId, riderTrain, trains = [], callout,
+  line, stops, reachedIdx, nextStopId, riderTrain, trains = [], callout,
   topInset = 0, bottomInset = 0, fitSignal = 0, showUserLocation = false,
 }: Props) {
   const { c, isDark } = useAppTheme();
+  const lc = lineColors(c, line);
   const mapRef = useRef<MapView>(null);
 
-  const tripCoords = useMemo(() => stops.map((id) => STATION_COORDS[id]).filter(Boolean), [stops]);
-  const tripLine = useMemo(() => tripShape(stops), [stops]);
-  const initialRegion = useMemo(() => regionAround(tripCoords.length ? tripCoords : Object.values(STATION_COORDS)), [tripCoords]);
+  const tripCoords = useMemo(() => stops.map((id) => COORDS[id]).filter(Boolean), [stops]);
+  const tripLine = useMemo(() => tripShape(line, stops), [line, stops]);
+  const initialRegion = useMemo(() => regionAround(tripCoords.length ? tripCoords : line.stations.map((id) => COORDS[id])), [tripCoords, line]);
   const mapStyle = useMemo(() => androidMapStyle(c), [c]);
 
   const progress: LatLng | undefined = riderTrain
     ? { latitude: riderTrain.lat, longitude: riderTrain.lng }
-    : STATION_COORDS[stops[Math.max(0, reachedIdx)]];
+    : COORDS[stops[Math.max(0, reachedIdx)]];
   const splitAt = progress ? nearestIndex(tripLine, progress) : 0;
   const travelled = tripLine.slice(0, splitAt + 1);
   const toGo = tripLine.slice(splitAt);
@@ -60,7 +62,7 @@ export function RideMap({
   }, [fit, fitSignal]);
 
   const otherTrains = trains.filter((t) => t.vehicleId !== riderTrain?.vehicleId);
-  const calloutCoord = callout ? STATION_COORDS[callout.stationId] : undefined;
+  const calloutCoord = callout ? COORDS[callout.stationId] : undefined;
 
   return (
     <MapView
@@ -76,29 +78,30 @@ export function RideMap({
       showsCompass={false}
       pitchEnabled={false}
       toolbarEnabled={false}>
-      {[RED_LINE_SHAPE.trunk, RED_LINE_SHAPE.ashmont, RED_LINE_SHAPE.braintree].map((pts, i) => (
-        <Polyline key={i} coordinates={pts} strokeColor={c.red + '55'} strokeWidth={5} lineCap="round" zIndex={1} />
+      {line.track.map((pts, i) => (
+        <Polyline key={`${line.id}-${i}`} coordinates={pts} strokeColor={lc.main + '55'} strokeWidth={5} lineCap="round" zIndex={1} />
       ))}
-      <Polyline coordinates={toGo} strokeColor={c.red + 'AA'} strokeWidth={8} lineCap="round" zIndex={2} />
-      <Polyline coordinates={travelled} strokeColor={c.red} strokeWidth={10} lineCap="round" zIndex={3} />
+      <Polyline coordinates={toGo} strokeColor={lc.main + 'AA'} strokeWidth={8} lineCap="round" zIndex={2} />
+      <Polyline coordinates={travelled} strokeColor={lc.main} strokeWidth={10} lineCap="round" zIndex={3} />
 
-      {STATIONS.map((s) => {
-        const coord = STATION_COORDS[s.id];
-        if (!coord) return null;
+      {line.stations.map((id) => {
+        const s = stationById(id);
+        const coord = COORDS[id];
+        if (!s || !coord) return null;
         const i = stops.indexOf(s.id);
         const kind = s.id === nextStopId ? 'next' : i === -1 ? 'off' : i <= reachedIdx ? 'passed' : 'trip';
         return (
           <Marker
             // Remount when the look changes, since tracksViewChanges is off.
-            key={`${s.id}-${kind}`}
+            key={`${line.id}-${s.id}-${kind}`}
             coordinate={coord}
             anchor={{ x: kind === 'off' ? 0.5 : 9 / LABEL_W, y: 0.5 }}
             tracksViewChanges={false}
             zIndex={kind === 'next' ? 8 : kind === 'off' ? 4 : 5}>
             {kind === 'off' ? (
-              <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: c.red + '99', backgroundColor: c.card }} />
+              <View style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: lc.main + '99', backgroundColor: c.card }} />
             ) : (
-              <StationLabel name={s.name} kind={kind} c={c} />
+              <StationLabel name={s.name} kind={kind} c={c} lc={lc} />
             )}
           </Marker>
         );
@@ -106,7 +109,7 @@ export function RideMap({
 
       {otherTrains.map((t) => (
         <Marker key={t.vehicleId} coordinate={{ latitude: t.lat, longitude: t.lng }} anchor={{ x: 0.5, y: 0.5 }} tracksViewChanges={false} zIndex={6} title={t.headsign}>
-          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: c.redBtn, borderWidth: 2, borderColor: c.card, opacity: 0.8 }} />
+          <View style={{ width: 14, height: 14, borderRadius: 7, backgroundColor: lc.btn, borderWidth: 2, borderColor: c.card, opacity: 0.8 }} />
         </Marker>
       ))}
 
@@ -119,7 +122,7 @@ export function RideMap({
           tracksViewChanges
           zIndex={20}
           title="Your train">
-          <TrainBadge c={c} />
+          <TrainBadge c={c} lc={lc} />
         </Marker>
       ) : null}
 
@@ -131,23 +134,25 @@ export function RideMap({
           tracksViewChanges
           zIndex={30}
           onPress={callout.onPress}>
-          <CalloutBubble callout={callout} c={c} />
+          <CalloutBubble callout={callout} c={c} lc={lc} />
         </Marker>
       ) : null}
     </MapView>
   );
 }
 
-function StationLabel({ name, kind, c }: { name: string; kind: 'next' | 'passed' | 'trip'; c: Palette }) {
+type LineColors = ReturnType<typeof lineColors>;
+
+function StationLabel({ name, kind, c, lc }: { name: string; kind: 'next' | 'passed' | 'trip'; c: Palette; lc: LineColors }) {
   const size = kind === 'next' ? 18 : 14;
   return (
     <View style={{ width: LABEL_W, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
       <View
         style={{
           width: size, height: size, borderRadius: size / 2, marginLeft: 9 - size / 2,
-          backgroundColor: kind === 'passed' ? c.red : c.card,
+          backgroundColor: kind === 'passed' ? lc.main : c.card,
           borderWidth: kind === 'next' ? 4 : 3,
-          borderColor: c.red,
+          borderColor: lc.main,
         }}
       />
       <Text
@@ -156,7 +161,7 @@ function StationLabel({ name, kind, c }: { name: string; kind: 'next' | 'passed'
           flexShrink: 1,
           fontFamily: font.black,
           fontSize: kind === 'next' ? 13 : 12,
-          color: kind === 'next' ? c.redInk : c.mapLabel,
+          color: kind === 'next' ? lc.ink : c.mapLabel,
           textShadowColor: c.bg,
           textShadowRadius: 4,
         }}>
@@ -166,9 +171,9 @@ function StationLabel({ name, kind, c }: { name: string; kind: 'next' | 'passed'
   );
 }
 
-function TrainBadge({ c }: { c: Palette }) {
+function TrainBadge({ c, lc }: { c: Palette; lc: LineColors }) {
   return (
-    <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: c.redBtn, borderWidth: 3, borderColor: c.card, alignItems: 'center', justifyContent: 'center' }}>
+    <View style={{ width: 32, height: 32, borderRadius: 9, backgroundColor: lc.btn, borderWidth: 3, borderColor: c.card, alignItems: 'center', justifyContent: 'center' }}>
       <Svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
         <Rect x={5} y={3} width={14} height={14} rx={3} />
         <Path d="M5 11h14M9 21l-2-4M15 21l2-4" />
@@ -179,7 +184,7 @@ function TrainBadge({ c }: { c: Palette }) {
   );
 }
 
-function CalloutBubble({ callout, c }: { callout: Callout; c: Palette }) {
+function CalloutBubble({ callout, c, lc }: { callout: Callout; c: Palette; lc: LineColors }) {
   return (
     <View style={{ paddingLeft: 16, paddingBottom: 16 }}>
       <View
@@ -190,7 +195,7 @@ function CalloutBubble({ callout, c }: { callout: Callout; c: Palette }) {
         <Mascot stationId={callout.stationId} size={36} />
         <View>
           <Text style={{ fontFamily: font.black, fontSize: 14, color: c.text }}>{callout.title}</Text>
-          <Text style={{ fontFamily: font.heavy, fontSize: 12, color: c.redInk }}>{callout.subtitle}</Text>
+          <Text style={{ fontFamily: font.heavy, fontSize: 12, color: lc.ink }}>{callout.subtitle}</Text>
         </View>
       </View>
     </View>
@@ -213,13 +218,14 @@ export function RecenterButton({ onPress, style }: { onPress: () => void; style?
   );
 }
 
-function tripShape(stops: string[]): LatLng[] {
+function tripShape(line: Line, stops: string[]): LatLng[] {
   if (stops.length < 2) return [];
-  const branch = STATIONS.find((s) => stops.includes(s.id) && s.branch)?.branch ?? 'ashmont';
-  // Branch arrays repeat the trunk's last point.
-  const path = [...RED_LINE_SHAPE.trunk, ...RED_LINE_SHAPE[branch].slice(1)];
-  const a = nearestIndex(path, STATION_COORDS[stops[0]]);
-  const b = nearestIndex(path, STATION_COORDS[stops[stops.length - 1]]);
+  const first = stops[0];
+  const lastStop = stops[stops.length - 1];
+  const k = line.sequences.findIndex((seq) => seq.includes(first) && seq.includes(lastStop));
+  const path = line.paths[Math.max(0, k)];
+  const a = nearestIndex(path, COORDS[first]);
+  const b = nearestIndex(path, COORDS[lastStop]);
   const slice = path.slice(Math.min(a, b), Math.max(a, b) + 1);
   return a <= b ? slice : slice.reverse();
 }

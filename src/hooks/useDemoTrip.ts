@@ -1,5 +1,5 @@
 /**
- * useDemoTrip(from, to): fake ride for demos (EXPO_PUBLIC_DEMO_MODE=1).
+ * useDemoTrip(line, from, to): fake ride for demos (EXPO_PUBLIC_DEMO_MODE=1).
  *
  * Same return shape as the live useTrip, so screens don't know the difference.
  * No network, no GPS: a pretend train starts at `from` and reaches the next
@@ -13,9 +13,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Train } from '@/api/mbta';
-import { STATION_COORDS } from '@/data/redLineMap';
+import { COORDS, type LineId } from '@/data/lines';
 import type { TripResult } from '@/hooks/useTrip';
-import { planTrip } from '@/lib/redLine';
+import { planTrip } from '@/lib/linePlan';
 
 const STEP_MS = 20_000;
 
@@ -29,8 +29,8 @@ type DemoState = {
 
 /** Fake train between stops[i] and stops[i+1], `t` = 0…1 of the way there. */
 function demoTrain(stops: string[], i: number, t: number, direction: Train['direction']): Train | undefined {
-  const a = STATION_COORDS[stops[i]];
-  const b = STATION_COORDS[stops[Math.min(i + 1, stops.length - 1)]];
+  const a = COORDS[stops[i]];
+  const b = COORDS[stops[Math.min(i + 1, stops.length - 1)]];
   if (!a || !b) return undefined;
   const atStation = i >= stops.length - 1 || t < 0.15; // dwell for the first ~3 s at each stop
   const k = atStation ? 0 : (t - 0.15) / 0.85;
@@ -47,10 +47,10 @@ function demoTrain(stops: string[], i: number, t: number, direction: Train['dire
   };
 }
 
-export function useDemoTrip(from: string, to: string): TripResult {
-  const plan = useMemo(() => planTrip(from, to), [from, to]);
+export function useDemoTrip(line: LineId, from: string, to: string): TripResult {
+  const plan = useMemo(() => planTrip(line, from, to), [line, from, to]);
   const stops = 'error' in plan ? null : plan.stops;
-  const key = `${from}>${to}`;
+  const key = `${line}:${from}>${to}`;
 
   const [demo, setDemo] = useState<DemoState | null>(null);
   const listenersRef = useRef(new Set<(stationId: string) => void>());
@@ -105,7 +105,7 @@ export function useDemoTrip(from: string, to: string): TripResult {
   }, []);
 
   if ('error' in plan) {
-    return { from, to, direction: 'south', stops: [], stopsLeft: 0, arrived: false, stopTimes: {}, source: 'demo', loading: false, error: plan.error, onArrive };
+    return { line, from, to, direction: 0, stops: [], stopsLeft: 0, arrived: false, stopTimes: {}, source: 'demo', loading: false, error: plan.error, onArrive };
   }
 
   // Ignore state left over from a previous trip until the new one ticks.
@@ -115,6 +115,7 @@ export function useDemoTrip(from: string, to: string): TripResult {
   const arrived = reachedIdx >= last;
 
   return {
+    line,
     from,
     to,
     direction: plan.direction,

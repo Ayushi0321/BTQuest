@@ -1,6 +1,5 @@
-// Red Line stations, north to south (Alewife → JFK/UMass → Ashmont / Braintree branches).
-// mbtaId = MBTA V3 API parent-station id. Double-check against
-// https://api-v3.mbta.com/stops?filter[route]=Red before relying on them.
+// Every station in the app, each with its own mascot. Line order and branches live in data/lines.ts.
+// mbtaId = MBTA V3 API parent-station id.
 
 export type BodyShape = 'car' | 'round' | 'tall' | 'bean';
 export type Accessory =
@@ -21,7 +20,8 @@ export type Station = {
   art?: { title: string; artist: string; story: string };
 };
 
-export const STATIONS: Station[] = [
+/** Red Line, north to south: trunk, then the Ashmont branch, then the Braintree branch. */
+export const RED_STATIONS: Station[] = [
   { id: 'ALE', name: 'Alewife', mbtaId: 'place-alfcl', mascot: 'Ally', shape: 'bean', color: '#5BB3B0', accessory: 'fin', scene: 'park' },
   { id: 'DAV', name: 'Davis', mbtaId: 'place-davis', mascot: 'Davi', shape: 'round', color: '#E9806E', accessory: 'star', scene: 'city' },
   {
@@ -51,6 +51,34 @@ export const STATIONS: Station[] = [
   { id: 'QAD', name: 'Quincy Adams', mbtaId: 'place-qamnl', mascot: 'Addie', shape: 'car', color: '#E58BB0', accessory: 'bow', scene: 'park', branch: 'braintree' },
   { id: 'BRA', name: 'Braintree', mbtaId: 'place-brntn', mascot: 'Brain', shape: 'bean', color: '#5DB884', accessory: 'clock', scene: 'park', branch: 'braintree' },
 ];
+
+/** Green Line B branch, Government Center to Boston College. Park Street is shared with the Red Line. */
+export const GREEN_B_STATIONS: Station[] = [
+  { id: 'GOV', name: 'Government Center', mbtaId: 'place-gover', mascot: 'Govi', shape: 'tall', color: '#7FA7D9', accessory: 'tophat', scene: 'city' },
+  { id: 'BOY', name: 'Boylston', mbtaId: 'place-boyls', mascot: 'Boyd', shape: 'round', color: '#E9A15B', accessory: 'headphones', scene: 'theatre' },
+  { id: 'ARL', name: 'Arlington', mbtaId: 'place-armnl', mascot: 'Arlo', shape: 'bean', color: '#7CC4A4', accessory: 'bow', scene: 'park' },
+  { id: 'COP', name: 'Copley', mbtaId: 'place-coecl', mascot: 'Copper', shape: 'car', color: '#D98C5F', accessory: 'grad', scene: 'tower' },
+  { id: 'HYN', name: 'Hynes Convention Center', mbtaId: 'place-hymnl', mascot: 'Hyde', shape: 'tall', color: '#9C7BD0', accessory: 'star', scene: 'city' },
+  { id: 'KMR', name: 'Kenmore', mbtaId: 'place-kencl', mascot: 'Kenzie', shape: 'round', color: '#E26B60', accessory: 'beanie', scene: 'theatre' },
+  { id: 'BLA', name: 'Blandford Street', mbtaId: 'place-bland', mascot: 'Blanche', shape: 'bean', color: '#6E93D6', accessory: 'leaf', scene: 'river' },
+  { id: 'BUE', name: 'Boston University East', mbtaId: 'place-buest', mascot: 'Easton', shape: 'car', color: '#C7615A', accessory: 'grad', scene: 'campus' },
+  { id: 'BUC', name: 'Boston University Central', mbtaId: 'place-bucen', mascot: 'Centra', shape: 'tall', color: '#E58BB0', accessory: 'headphones', scene: 'campus' },
+  { id: 'AMY', name: 'Amory Street', mbtaId: 'place-amory', mascot: 'Amos', shape: 'round', color: '#5BB3B0', accessory: 'antenna', scene: 'campus' },
+  { id: 'BAB', name: 'Babcock Street', mbtaId: 'place-babck', mascot: 'Babs', shape: 'bean', color: '#F0A04B', accessory: 'mitten', scene: 'city' },
+  { id: 'PAC', name: 'Packard’s Corner', mbtaId: 'place-brico', mascot: 'Pax', shape: 'car', color: '#A479B8', accessory: 'clock', scene: 'city' },
+  { id: 'HAV', name: 'Harvard Avenue', mbtaId: 'place-harvd', mascot: 'Ava', shape: 'tall', color: '#6CC19A', accessory: 'star', scene: 'theatre' },
+  { id: 'GRG', name: 'Griggs Street', mbtaId: 'place-grigg', mascot: 'Grigg', shape: 'round', color: '#9AA6B2', accessory: 'beanie', scene: 'city' },
+  { id: 'ALS', name: 'Allston Street', mbtaId: 'place-alsgr', mascot: 'Stony', shape: 'bean', color: '#E6B23A', accessory: 'antenna', scene: 'city' },
+  { id: 'WAR', name: 'Warren Street', mbtaId: 'place-wrnst', mascot: 'Wren', shape: 'car', color: '#5DB884', accessory: 'leaf', scene: 'park' },
+  { id: 'WSH', name: 'Washington Street', mbtaId: 'place-wascm', mascot: 'Washi', shape: 'tall', color: '#7096DA', accessory: 'tophat', scene: 'city' },
+  { id: 'SUT', name: 'Sutherland Road', mbtaId: 'place-sthld', mascot: 'Suki', shape: 'round', color: '#EE9A45', accessory: 'bow', scene: 'park' },
+  { id: 'CHW', name: 'Chiswick Road', mbtaId: 'place-chswk', mascot: 'Chiz', shape: 'bean', color: '#C08AB9', accessory: 'crown', scene: 'park' },
+  { id: 'CHH', name: 'Chestnut Hill Avenue', mbtaId: 'place-chill', mascot: 'Chet', shape: 'car', color: '#B5835A', accessory: 'leaf', scene: 'park' },
+  { id: 'SOU', name: 'South Street', mbtaId: 'place-sougr', mascot: 'Sunny', shape: 'tall', color: '#E9806E', accessory: 'star', scene: 'park' },
+  { id: 'BCL', name: 'Boston College', mbtaId: 'place-lake', mascot: 'Collie', shape: 'round', color: '#B0413E', accessory: 'grad', scene: 'campus' },
+];
+
+export const STATIONS: Station[] = [...RED_STATIONS, ...GREEN_B_STATIONS];
 
 export const stationById = (id: string): Station | undefined => STATIONS.find((s) => s.id === id);
 export const stationByMbtaId = (mbtaId: string): Station | undefined => STATIONS.find((s) => s.mbtaId === mbtaId);

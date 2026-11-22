@@ -4,10 +4,10 @@
  * pick/follow the rider's train, fire onArrive, return a Snapshot.
  * The picking rules are documented at the top of src/hooks/useTrip.ts.
  */
-import { getArrivals, getRedLineTrains, getTripPredictions, type Train } from '@/api/mbta';
-import { STATION_COORDS } from '@/data/redLineMap';
+import { getArrivals, getTrains, getTripPredictions, type Train } from '@/api/mbta';
+import { COORDS } from '@/data/lines';
 import { stationById } from '@/data/stations';
-import { distanceMeters, stationsBefore, trainReaches, trainServesTrip, type TripPlan } from '@/lib/redLine';
+import { distanceMeters, stationsBefore, trainReaches, trainServesTrip, type TripPlan } from '@/lib/linePlan';
 
 const GPS_MAX_AGE_MS = 2 * 60_000;
 const GPS_MAX_DISTANCE_M = 600;
@@ -87,7 +87,7 @@ async function pickTrain(
   }
 
   // 2. First train predicted at `from`, going our way.
-  const arrivals = await getArrivals(plan.from);
+  const arrivals = await getArrivals(plan.from, plan.line);
   for (const a of arrivals) {
     if (a.direction !== plan.direction || !a.vehicleId) continue;
     const t = boardable.find((x) => x.vehicleId === a.vehicleId);
@@ -95,7 +95,7 @@ async function pickTrain(
   }
 
   // 3. No usable prediction: the approaching train physically closest to `from`.
-  const here = STATION_COORDS[plan.from];
+  const here = COORDS[plan.from];
   const best = here ? nearest(boardable, here.latitude, here.longitude) : undefined;
   return best ? { train: best.train, source: 'nearest' } : undefined;
 }
@@ -111,8 +111,8 @@ function nearest(trains: Train[], lat: number, lng: number): { train: Train; dis
 
 /** One poll: fetch trains, pick/follow the rider's train, fire arrivals. */
 export async function tick(plan: TripPlan, mem: Memory, gps: GpsFix | null, listeners: Set<(id: string) => void>): Promise<Snapshot> {
-  const trains = await getRedLineTrains();
-  const before = stationsBefore(plan.from, plan.direction);
+  const trains = await getTrains(plan.line);
+  const before = stationsBefore(plan.line, plan.from, plan.direction);
   const last = plan.stops.length - 1;
 
   const candidates = trains.filter(
@@ -120,7 +120,7 @@ export async function tick(plan: TripPlan, mem: Memory, gps: GpsFix | null, list
   );
   // Still to come at `from`, and actually going to stop there (not a short-turn that ends first).
   const approaching = candidates.filter(
-    (t) => (before.has(t.stationId!) || t.stationId === plan.from) && trainReaches(t, plan.from),
+    (t) => (before.has(t.stationId!) || t.stationId === plan.from) && trainReaches(plan.line, t, plan.from),
   );
 
   // Follow the locked train, tolerating a few missed polls.
@@ -214,7 +214,7 @@ export async function tick(plan: TripPlan, mem: Memory, gps: GpsFix | null, list
   const stopTimes: Record<string, Date> = { ...mem.passedAt };
   if (train.tripId) {
     try {
-      const etas = await getTripPredictions(train.tripId);
+      const etas = await getTripPredictions(train.tripId, plan.line);
       for (const e of etas) {
         if (e.arrivalTime && plan.stops.includes(e.stationId) && !mem.passedAt[e.stationId]) stopTimes[e.stationId] = e.arrivalTime;
       }

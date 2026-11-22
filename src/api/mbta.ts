@@ -1,17 +1,17 @@
 /**
- * MBTA V3 API client (Red Line today, written to take any route).
+ * MBTA V3 API client for the lines in data/lines.ts (Red, Green B).
  *
  * Everything that knows about the MBTA's JSON:API format lives in this file.
  * The rest of the app only sees the plain types exported below
  * (Arrival, Train, Alert) and app station ids like 'KEN'.
  *
  *   getArrivals('KEN')    → upcoming trains at a station, soonest first
- *   getRedLineTrains()    → every Red Line train with its position
- *   getRedLineAlerts()    → service alerts active right now
+ *   getTrains()           → every train on a route with its position
+ *   getAlerts()           → service alerts active right now
  *
  * Each function takes an optional `route` (default 'Red'). To add another
- * line later: add its stations to data/stations.ts and its direction ids to
- * ROUTE_DIRECTIONS below. Nothing else in this file is Red-specific.
+ * line: add its stations to data/stations.ts, the line to data/lines.ts, and
+ * its destinations to ROUTE_DESTINATIONS below.
  *
  * API key: EXPO_PUBLIC_MBTA_API_KEY in .env (sent as the `x-api-key` header).
  * With a key the limit is 1,000 requests/minute; without one it's 20/minute.
@@ -26,11 +26,11 @@ const TIMEOUT_MS = 10_000;
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
-/** south = toward Ashmont/Braintree, north = toward Alewife (Red Line meaning). */
-export type Direction = 'south' | 'north';
+/** MBTA direction_id. Red: 0 = toward Ashmont/Braintree, 1 = toward Alewife. Green B: 0 = toward Boston College, 1 = toward Government Center. */
+export type Direction = 0 | 1;
 
-/** MBTA route id. Only 'Red' has app station data so far. */
-export type RouteId = 'Red';
+/** MBTA route id. */
+export type RouteId = 'Red' | 'Green-B';
 const DEFAULT_ROUTE: RouteId = 'Red';
 
 export type Arrival = {
@@ -142,7 +142,7 @@ type StopAttrs = { name: string; location_type: number };
 type PredictionAttrs = {
   arrival_time: string | null;
   departure_time: string | null;
-  direction_id: 0 | 1;
+  direction_id: Direction;
   schedule_relationship: string | null; // null = normal, 'ADDED', 'CANCELLED', 'SKIPPED', 'NO_DATA'
   status: string | null;
   trip_headsign?: string | null;
@@ -152,7 +152,7 @@ type VehicleAttrs = {
   longitude: number | null;
   bearing: number | null;
   current_status: TrainStatus;
-  direction_id: 0 | 1;
+  direction_id: Direction;
 };
 type AlertAttrs = { header: string; effect: string; severity: number };
 
@@ -162,23 +162,14 @@ function relId(r: Resource<unknown>, name: string): string | undefined {
   return data && !Array.isArray(data) ? data.id : undefined;
 }
 
-/**
- * What direction_id 0 and 1 mean on each route. Always confirm a new line with
- * GET /routes/<id> (direction_names / direction_destinations).
- * Red: direction_names = ["South", "North"],
- *      direction_destinations = ["Ashmont/Braintree", "Alewife"].
- */
-const ROUTE_DIRECTIONS: Record<RouteId, [Direction, Direction]> = {
-  Red: ['south', 'north'],
+/** direction_destinations from GET /routes/<id>, used when a prediction has no headsign. */
+const ROUTE_DESTINATIONS: Record<RouteId, [string, string]> = {
+  Red: ['Ashmont/Braintree', 'Alewife'],
+  'Green-B': ['Boston College', 'Government Center'],
 };
 
-function toDirection(directionId: 0 | 1, route: RouteId): Direction {
-  return ROUTE_DIRECTIONS[route][directionId];
-}
-
-/** Direction → the headsign to show when the API doesn't give one. */
-function fallbackHeadsign(directionId: 0 | 1, route: RouteId): string {
-  return ROUTE_DIRECTIONS[route][directionId] === 'south' ? 'Ashmont/Braintree' : 'Alewife';
+function fallbackHeadsign(directionId: Direction, route: RouteId): string {
+  return ROUTE_DESTINATIONS[route][directionId];
 }
 
 /** Map trip id → headsign from a response's `included` trips. */
@@ -194,7 +185,7 @@ function headsignsByTrip(doc: Doc<unknown>): Map<string, string> {
 //
 // Vehicles and predictions point at *platform* stop ids (e.g. '70071' =
 // Kendall/MIT southbound), not the parent 'place-…' ids we store in
-// stations.ts. We fetch every Red Line parent station with its child stops
+// stations.ts. We fetch every parent station on the route with its child stops
 // once, and cache a map of child id → app station id.
 
 const lookupCache = new Map<RouteId, Promise<Map<string, string>>>();
@@ -232,7 +223,7 @@ export function getStationLookup(route: RouteId = DEFAULT_ROUTE): Promise<Map<st
   return promise;
 }
 
-/** App station id for any MBTA stop id (platform or parent), if it's a Red Line station. */
+/** App station id for any MBTA stop id (platform or parent), if the app knows the station. */
 export async function stationIdForStop(stopId: string, route: RouteId = DEFAULT_ROUTE): Promise<string | undefined> {
   const lookup = await getStationLookup(route);
   return lookup.get(stopId) ?? stationByMbtaId(stopId)?.id;
@@ -241,7 +232,7 @@ export async function stationIdForStop(stopId: string, route: RouteId = DEFAULT_
 // ─── Public functions ────────────────────────────────────────────────────────
 
 /**
- * Upcoming Red Line trains at a station (both directions), soonest first.
+ * Upcoming trains on a route at a station (both directions), soonest first.
  * Cancelled/skipped trips and trains that already left are removed.
  * Returns [] late at night or when shuttle buses replace trains.
  */
@@ -274,7 +265,7 @@ export async function getArrivals(stationId: string, route: RouteId = DEFAULT_RO
     const tripId = relId(p, 'trip');
     arrivals.push({
       stationId: station.id,
-      direction: toDirection(a.direction_id, route),
+      direction: a.direction_id,
       headsign: a.trip_headsign ?? (tripId ? headsigns.get(tripId) : undefined) ?? fallbackHeadsign(a.direction_id, route),
       arrivalTime,
       secondsAway: arrivalTime ? Math.max(0, Math.round((arrivalTime.getTime() - now) / 1000)) : null,
@@ -289,7 +280,7 @@ export async function getArrivals(stationId: string, route: RouteId = DEFAULT_RO
 }
 
 /** Every train on the route currently reporting a position. Returns [] when none are running. */
-export async function getRedLineTrains(route: RouteId = DEFAULT_ROUTE): Promise<Train[]> {
+export async function getTrains(route: RouteId = DEFAULT_ROUTE): Promise<Train[]> {
   const [doc, lookup] = await Promise.all([
     mbtaGet<Doc<VehicleAttrs>>('/vehicles', {
       'filter[route]': route,
@@ -310,7 +301,7 @@ export async function getRedLineTrains(route: RouteId = DEFAULT_ROUTE): Promise<
       lat: a.latitude,
       lng: a.longitude,
       bearing: a.bearing ?? 0,
-      direction: toDirection(a.direction_id, route),
+      direction: a.direction_id,
       status: a.current_status,
       stationId: stopId ? lookup.get(stopId) ?? stationByMbtaId(stopId)?.id : undefined,
       headsign: tripId ? headsigns.get(tripId) : undefined,
@@ -347,7 +338,7 @@ export async function getTripPredictions(tripId: string, route: RouteId = DEFAUL
 }
 
 /** Alerts active right now on the route, most severe first. */
-export async function getRedLineAlerts(route: RouteId = DEFAULT_ROUTE): Promise<Alert[]> {
+export async function getAlerts(route: RouteId = DEFAULT_ROUTE): Promise<Alert[]> {
   const doc = await mbtaGet<Doc<AlertAttrs>>('/alerts', {
     'filter[route]': route,
     'filter[datetime]': 'NOW',
