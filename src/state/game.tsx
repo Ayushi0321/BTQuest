@@ -36,7 +36,7 @@ function uuid(): string {
 }
 
 type Stats = { points: number; week: number; month: number; streak: number; weekArt: number };
-// repeat: same station's ride card already pulled in the last 24 h, so no points.
+// repeat: same station (ride card) or same code (QR / reward card) already pulled in the last 24 h, so no points.
 type Op = { kind: 'pull'; card: OwnedCard; repeat?: boolean } | { kind: 'art'; stationId: string };
 type Saved = { cards: OwnedCard[]; artFound: Record<string, boolean>; stats: Stats; queue: Op[] };
 
@@ -59,7 +59,7 @@ type Game = {
   pending: number;
   /**
    * Arriving at a station: one new card, +10 points. Returns the card, whether it's the first one there,
-   * and repeat (ride card for this station already pulled in the last 24 h: album only, no points).
+   * and repeat (same station, or same QR / reward code, already pulled in the last 24 h: album only, no points).
    */
   pull: (stationId: string, place?: { name: string; code: string }, rarity?: Rarity) => { card: OwnedCard; isNew: boolean; repeat: boolean };
   findArt: (stationId: string) => void;
@@ -204,8 +204,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
       const card: OwnedCard = { uid: uuid(), stationId, seed: 100 + Math.floor(Math.random() * 9000), rarity, place: place?.name, placeCode: place?.code, at: now };
       const owned = latest.current.cards;
       const isNew = !owned.some((c) => c.stationId === stationId);
-      // Mirrors pull_card on the server. Place and reward cards are not limited.
-      const repeat = !place && owned.some((c) => c.stationId === stationId && !c.placeCode && c.at != null && now - c.at < DAY_MS);
+      // Mirrors pull_card on the server: points once per 24 h per station for ride cards,
+      // and once per 24 h per code for QR / reward cards (place set).
+      const recent = (c: OwnedCard) => c.at != null && now - c.at < DAY_MS;
+      const repeat = place
+        ? owned.some((c) => c.placeCode === place.code && recent(c))
+        : owned.some((c) => c.stationId === stationId && !c.placeCode && recent(c));
       update((d) => ({ ...d, cards: [...d.cards, card], queue: [...d.queue, { kind: 'pull', card, repeat }] }));
       return { card, isNew, repeat };
     },

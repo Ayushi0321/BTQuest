@@ -42,7 +42,7 @@ export function DuelMatchmaker(p: Props) {
     enabled: p.enabled, line: p.line, trainId: p.trainId, nickname: p.nickname, mascot: p.mascot,
     supabase: p.supabase, userId: p.userId, demo: p.demo, demoOptions: p.demoOptions,
   });
-  const { state } = mm;
+  const { state, botFill } = mm;
 
   // one-off notes ("X can't duel — finding another rider…") go to the app's banner
   const lastNote = useRef(0);
@@ -52,6 +52,11 @@ export function DuelMatchmaker(p: Props) {
       announce({ text: state.note.text, kind: 'info', voice: false, buzz: 'tap' });
     }
   }, [state.note, announce]);
+
+  // 30 s with no free rider → say so before the bot's invite pops up
+  useEffect(() => {
+    if (botFill) announce({ text: `No riders free on the ${p.lineLabel} right now. Matching you with a bot rider.`, kind: 'info', buzz: 'tap' });
+  }, [botFill, announce, p.lineLabel]);
 
   // both said yes → go (once per match)
   const launched = useRef<string | null>(null);
@@ -68,11 +73,14 @@ export function DuelMatchmaker(p: Props) {
   const offer = state.offer;
   const showPopup = (state.phase === 'offer' || state.phase === 'waiting') && !!offer;
   const secsLeft = offer ? Math.max(1, Math.round((offer.expiresAt - Date.now()) / 1000)) : 20;
-  const where = offer?.trainId && offer.trainId !== 'demo-train' ? `${p.lineLabel} · same train` : `${p.lineLabel} · riding now`;
+  // botFill = a bot standing in for a real rider. (Scripted demo riders in demo mode keep the normal copy.)
+  const where = botFill
+    ? `${p.lineLabel} · no riders free right now`
+    : offer?.trainId && offer.trainId !== 'demo-train' ? `${p.lineLabel} · same train` : `${p.lineLabel} · riding now`;
 
   return (
     <>
-      {!p.hidePill && <MatchPill state={state} enabled={p.enabled} onToggle={p.onToggle} lineLabel={p.lineLabel} demo={state.source === 'demo'} />}
+      {!p.hidePill && <MatchPill state={state} enabled={p.enabled} onToggle={p.onToggle} lineLabel={p.lineLabel} demo={state.source === 'demo'} bot={botFill} />}
       {offer && (
         <DuelInvite
           key={offer.id}
@@ -83,8 +91,8 @@ export function DuelMatchmaker(p: Props) {
           myStationId={p.mascot}
           where={where}
           expiresInSec={secsLeft}
-          eyebrow={state.phase === 'waiting' ? 'YOU SAID YES' : 'MATCH FOUND'}
-          title={state.phase === 'waiting' ? `Waiting for ${offer.opponent.nickname}…` : `Duel ${offer.opponent.nickname}?`}
+          eyebrow={botFill ? 'BOT MATCH' : state.phase === 'waiting' ? 'YOU SAID YES' : 'MATCH FOUND'}
+          title={botFill ? `Duel bot ${offer.opponent.nickname}?` : state.phase === 'waiting' ? `Waiting for ${offer.opponent.nickname}…` : `Duel ${offer.opponent.nickname}?`}
           acceptLabel="Duel!"
           declineLabel={state.phase === 'waiting' ? 'Cancel' : 'Not now'}
           onAccept={() => { void mm.respond(true); }}
@@ -97,7 +105,7 @@ export function DuelMatchmaker(p: Props) {
 }
 
 /** "Duel me" switch with a live status line. */
-export function MatchPill({ state, enabled, onToggle, lineLabel, demo }: { state: MatchState; enabled: boolean; onToggle: (on: boolean) => void; lineLabel: string; demo?: boolean }) {
+export function MatchPill({ state, enabled, onToggle, lineLabel, demo, bot }: { state: MatchState; enabled: boolean; onToggle: (on: boolean) => void; lineLabel: string; demo?: boolean; bot?: boolean }) {
   const { c } = useAppTheme();
   const pulse = useRef(new Animated.Value(1)).current;
   const [, tick] = useState(0);
@@ -122,7 +130,8 @@ export function MatchPill({ state, enabled, onToggle, lineLabel, demo }: { state
 
   let line = `Get matched with a rider on the ${lineLabel}`;
   if (enabled) {
-    if (state.phase === 'searching') line = state.looking > 0 ? `Matching you… ${state.looking} rider${state.looking === 1 ? '' : 's'} looking` : `Looking for a rider on the ${lineLabel}…`;
+    if (state.phase === 'searching' && bot) line = 'No riders free · getting a bot rider…';
+    else if (state.phase === 'searching') line = state.looking > 0 ? `Matching you… ${state.looking} rider${state.looking === 1 ? '' : 's'} looking` : `Looking for a rider on the ${lineLabel}…`;
     else if (state.phase === 'offer') line = 'Match found!';
     else if (state.phase === 'waiting') line = 'Waiting for your opponent…';
     else if (state.phase === 'ready') line = 'Duel starting!';
@@ -143,7 +152,7 @@ export function MatchPill({ state, enabled, onToggle, lineLabel, demo }: { state
         <Text style={{ fontFamily: font.black, fontSize: 15, color: enabled ? '#FFFFFF' : c.muted }}>VS</Text>
       </View>
       <View style={{ flex: 1 }}>
-        <Text style={{ fontFamily: font.black, fontSize: 16, color: c.text }}>Train Duel{demo && enabled ? ' · demo riders' : ''}</Text>
+        <Text style={{ fontFamily: font.black, fontSize: 16, color: c.text }}>Train Duel{enabled ? (bot ? ' · bot rider' : demo ? ' · demo riders' : '') : ''}</Text>
         <Animated.Text numberOfLines={1} style={{ opacity: pulse, fontFamily: font.heavy, fontSize: 13, color: c.muted }}>{line}</Animated.Text>
       </View>
       <Switch value={enabled} onValueChange={onToggle} trackColor={{ true: '#C64B41', false: c.track }} thumbColor="#FFFFFF" />

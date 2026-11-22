@@ -20,6 +20,8 @@ export type Line = {
   /** Picker order. */
   stations: string[];
   toward: (direction: Direction, to: string) => string;
+  /** Legendary card a rider wins for a matched duel on this line. The code must be listed in pull_card on the server. */
+  champion: { stationId: string; name: string; code: string };
 };
 
 const redTrunk = RED_STATIONS.filter((s) => !s.branch).map((s) => s.id);
@@ -44,6 +46,7 @@ export const LINES: Line[] = [
       const branch = stationById(to)?.branch;
       return branch === 'ashmont' ? 'Ashmont' : branch === 'braintree' ? 'Braintree' : 'Ashmont / Braintree';
     },
+    champion: { stationId: 'KEN', name: 'Red Line Champion', code: 'RED-CHAMPION' },
   },
   {
     id: 'Green-B',
@@ -55,6 +58,7 @@ export const LINES: Line[] = [
     track: [GREEN_B_SHAPE],
     stations: greenB,
     toward: (direction) => (direction === 0 ? 'Boston College' : 'Government Center'),
+    champion: { stationId: 'COP', name: 'Green Line Champion', code: 'GREEN-B-CHAMPION' },
   },
 ];
 

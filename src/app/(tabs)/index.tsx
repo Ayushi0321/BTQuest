@@ -488,7 +488,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
               onReady={(offer) =>
                 router.push({
                   pathname: '/duel/[matchId]',
-                  params: { matchId: offer.id, opponent: offer.opponent.nickname, mascot: offer.opponent.mascot, bot: offer.isBot ? '1' : '0' },
+                  params: { matchId: offer.id, opponent: offer.opponent.nickname, mascot: offer.opponent.mascot, bot: offer.isBot ? '1' : '0', line: line.id },
                 })
               }
             />

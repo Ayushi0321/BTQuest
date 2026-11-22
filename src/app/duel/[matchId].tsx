@@ -3,13 +3,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Dimensions, View } from 'react-native';
 
 import { PullModal } from '@/components/PullModal';
-import { Button, Screen } from '@/components/ui';
+import { Screen } from '@/components/ui';
+import { LINES } from '@/data/lines';
 import { finishCurrentMatch } from '@/duel/match';
 import { SupabaseDuelTransport } from '@/duel/supabaseTransport';
 import { ChargePhase, ClashArena, DuelResult, HandPicker, makeFighter, type ClashResult, type DuelCardView } from '@/duel/ui';
 import { BotTransport, ownedCardsToDuelCards } from '@/features/duel/botTransport';
 import { getElement, matchWinner } from '@/features/duel/rules';
-import { getActiveDuelTransport, setActiveDuelTransport } from '@/features/duel/transportRegistry';
 import type { DuelCard, RoundResult } from '@/features/duel/types';
 import { useAuth } from '@/state/auth';
 import { useGame, type OwnedCard } from '@/state/game';
@@ -71,28 +71,26 @@ function toCardView(card: DuelCard): DuelCardView {
 }
 
 export default function DuelMatch() {
-  // bot is set when we came from matchmaking: '1' = demo rider, '0' = real rider.
-  const params = useLocalSearchParams<{ matchId: string; bot?: string; opponent?: string; mascot?: string }>();
+  // Opened only by matchmaking on the Ride tab. bot: '1' = bot rider (no free rider on the line), '0' = real rider.
+  // line is the route id the match was made on ('Red', 'Green-B').
+  const params = useLocalSearchParams<{ matchId: string; bot?: string; opponent?: string; mascot?: string; line?: string }>();
   const { matchId } = params;
-  const matched = params.bot === '1' || params.bot === '0';
+  // Winning earns that line's Champion card.
+  const champion = LINES.find((l) => l.id === params.line)?.champion;
   const { profile } = useAuth();
   const { cards, pull } = useGame();
   const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
   const width = Math.max(320, screenWidth - 24);
 
-  // Picked once per screen. duelId is what the transport knows the duel by (a bot uses its own practice id).
+  // Picked once per screen. duelId is what the transport knows the duel by (the bot makes its own id).
   const [{ transport, duelId }] = useState(() => {
-    const me = { riderId: 'practice-me', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' };
     if (params.bot === '0') {
       return { transport: new SupabaseDuelTransport(`rider-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`), duelId: matchId };
     }
-    const active = params.bot === '1' ? null : getActiveDuelTransport();
-    if (active) return { transport: active, duelId: matchId };
+    const me = { riderId: 'me', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' };
+    const opponent = { riderId: 'bot-rider', nickname: params.opponent ?? 'Rider', mascotStationId: params.mascot ?? 'KEN' };
     const bot = new BotTransport(cards);
-    const opponent = params.bot === '1' ? { riderId: 'demo-rider', nickname: params.opponent ?? 'Rider', mascotStationId: params.mascot ?? 'KEN' } : undefined;
-    const id = bot.startPractice(me, cards, opponent);
-    setActiveDuelTransport(bot);
-    return { transport: bot, duelId: id };
+    return { transport: bot, duelId: bot.startPractice(me, cards, opponent) };
   });
   const isBot = transport instanceof BotTransport;
 
@@ -116,23 +114,28 @@ export default function DuelMatch() {
   const [pending, setPending] = useState<RoundResult | null>(null);
   const [rounds, setRounds] = useState<RoundResult[]>([]);
   const [oppName, setOppName] = useState(params.opponent ?? 'Rider');
-  const [reward, setReward] = useState<OwnedCard | null>(null);
+  const [reward, setReward] = useState<{ card: OwnedCard; repeat: boolean } | null>(null);
   const sentPick = useRef(false);
   const sentCharge = useRef(false);
 
   // Tell the matchmaker the duel is over (win, lose, opponent left, or closed early). Once.
   const finished = useRef(false);
   const finishMatch = useCallback(() => {
-    if (!matched || finished.current) return;
+    if (finished.current) return;
     finished.current = true;
     void finishCurrentMatch();
-  }, [matched]);
+  }, []);
   useEffect(() => {
     if (phase === 'end') finishMatch();
   }, [phase, finishMatch]);
   useEffect(() => finishMatch, [finishMatch]);
 
+  // Deal once per round. `cards` gets a new identity on every sync or background pull,
+  // which used to reshuffle the hand while the rider was picking.
+  const dealtRound = useRef(0);
   useEffect(() => {
+    if (dealtRound.current === round) return;
+    dealtRound.current = round;
     const source = cards.length >= 3 ? cards : [...cards, ...FALLBACK_CARDS];
     setHand(dealHand(ownedCardsToDuelCards(source)));
   }, [cards, round]);
@@ -195,9 +198,9 @@ export default function DuelMatch() {
 
     const winnerMatch = matchWinner(nextRounds);
     if (winnerMatch) {
-      if (winnerMatch === 'a') {
-        const champion = pull('KEN', { name: 'Red Line Champion', code: 'RED-CHAMPION' }, 'L');
-        setReward(champion.card);
+      if (winnerMatch === 'a' && champion) {
+        const won = pull(champion.stationId, { name: champion.name, code: champion.code }, 'L');
+        setReward(won);
       }
       setPhase('end');
       return;
@@ -213,18 +216,6 @@ export default function DuelMatch() {
     sentPick.current = false;
     sentCharge.current = false;
     setPhase('pick');
-  };
-
-  const rematch = () => {
-    if (isBot) {
-      const bot = new BotTransport(cards);
-      const me = { riderId: 'local', nickname: profile?.username ?? 'Rider', mascotStationId: profile?.fav_station ?? 'KEN' };
-      setActiveDuelTransport(bot);
-      const nextId = bot.startPractice(me, cards);
-      router.replace(`/duel/${nextId}` as never);
-    } else {
-      router.back();
-    }
   };
 
   const aWins = rounds.filter((item) => item.winner === 'a').length;
@@ -247,17 +238,16 @@ export default function DuelMatch() {
             oppName={oppName}
             winningCard={winningCard}
             width={width}
-            onRematch={rematch}
-            rematchLabel={isBot ? 'Rematch vs bot' : 'Rematch'}
             onBack={() => router.back()}
           />
         </View>
-        {won && reward ? (
+        {won && reward && champion ? (
           <PullModal
-            card={reward}
+            card={reward.card}
             isNew
+            repeat={reward.repeat}
             canHunt={false}
-            extra="Champion Legendary · Red Line"
+            extra={`Champion Legendary · ${champion.name.replace(' Champion', '')}`}
             onHunt={() => setReward(null)}
             onClose={() => setReward(null)}
           />

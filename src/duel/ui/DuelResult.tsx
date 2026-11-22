@@ -28,7 +28,7 @@ type Props = {
   onBack: () => void;
 };
 
-const WIN_LINES = ['What a duel! That card is going in the hall of fame.', 'Champion of the car! Ride on, legend.', 'You charged up like the Red Line at rush hour!'];
+const WIN_LINES = ['What a duel! That card is going in the hall of fame.', 'Champion of the car! Ride on, legend.', 'You charged up like a train at rush hour!'];
 const LOSE_LINES = ['So close! Every duel makes your deck stronger.', 'Good duel! Shake hands — or wave across the car.', 'Next stop: rematch. You’ve got this!'];
 
 export function DuelResult({ won, you, opp, oppName, winningCard, width: W, onRematch, rematchLabel = 'Rematch', onBack }: Props) {

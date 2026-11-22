@@ -46,6 +46,12 @@
         }
       ],
       [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "TQuest uses your location to follow your ride and to check you're at a landmark when you scan its QR code."
+        }
+      ],
+      [
         "expo-audio",
         {
           "microphonePermission": "TQuest uses the microphone so you can ask Questie questions out loud."
