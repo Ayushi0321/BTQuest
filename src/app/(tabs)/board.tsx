@@ -23,7 +23,8 @@ async function fetchBoard(scope: Scope): Promise<Row[] | null> {
 
 export default function Board() {
   const { c } = useAppTheme();
-  const { points, pending } = useGame();
+  const { points, pending, weekArt } = useGame();
+  const artLeft = Math.max(0, 3 - weekArt);
   const [scope, setScope] = useState<Scope>('week');
   const [boards, setBoards] = useState<Partial<Record<Scope, Row[]>>>({});
   const [failed, setFailed] = useState(false);
@@ -68,8 +69,11 @@ export default function Board() {
       footer={pinned ? <View style={{ paddingHorizontal: 18, paddingVertical: 10, borderTopWidth: 2, borderTopColor: c.line, backgroundColor: c.bg }}>{row(pinned, 'pinned')}</View> : null}>
       <Card>
         <Kicker color={c.purple}>Weekly challenge</Kicker>
-        <T size={18} weight="black" style={{ marginVertical: 8 }}>Art hunter: scan 3 artwork stamps</T>
-        <ProgressBar value={1 / 3} color={c.purple} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 8 }}>
+          <T size={18} weight="black" style={{ flex: 1 }}>{artLeft ? `Art hunter: ${artLeft} more artwork${artLeft > 1 ? 's' : ''} to go` : 'Art hunter: done this week!'}</T>
+          <T size={15} weight="black" color={c.muted}>{Math.min(weekArt, 3)} / 3</T>
+        </View>
+        <ProgressBar value={weekArt / 3} color={c.purple} />
       </Card>
 
       <View style={{ flexDirection: 'row', backgroundColor: c.card2, borderRadius: 16, padding: 4, gap: 4 }}>

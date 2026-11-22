@@ -1,6 +1,6 @@
 import { useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Pressable, Switch, Text, View } from 'react-native';
+import { Alert, Platform, Pressable, Switch, Text, View } from 'react-native';
 
 import { getUsage, hasElevenLabs } from '@/api/elevenlabs';
 
@@ -9,6 +9,7 @@ import { Button, Card, Kicker, ProgressBar, Screen, T } from '@/components/ui';
 import { riderMascot } from '@/data/stations';
 import { buzz, type BuzzPattern } from '@/lib/haptics';
 import { useAuth } from '@/state/auth';
+import { useGame } from '@/state/game';
 import { useFeedback, type FeedbackSettings } from '@/state/feedback';
 import { font } from '@/theme/colors';
 import { useAppTheme, type ThemeMode } from '@/theme/ThemeContext';
@@ -25,7 +26,22 @@ const PATTERN_GUIDE: [BuzzPattern, string, string][] = [
 export default function You() {
   const { c, mode, setMode } = useAppTheme();
   const { settings, setSetting, announce } = useFeedback();
-  const { session, profile, signOut } = useAuth();
+  const { session, profile, signOut, deleteAccount } = useAuth();
+  const { streak } = useGame();
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const confirmDelete = () => {
+    const run = async () => setDeleteError(await deleteAccount());
+    const msg = 'This removes your account, cards and points for good.';
+    if (Platform.OS === 'web') {
+      if (window.confirm(`Delete account? ${msg}`)) run();
+      return;
+    }
+    Alert.alert('Delete account?', msg, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Delete', style: 'destructive', onPress: run },
+    ]);
+  };
   const [usage, setUsage] = useState<{ used: number; limit: number } | null>(null);
   useFocusEffect(useCallback(() => { getUsage().then(setUsage); }, []));
 
@@ -65,6 +81,7 @@ export default function You() {
         <View style={{ flex: 1 }}>
           <T size={24} weight="black">Hi, {profile?.username ?? 'rider'}</T>
           <T size={15} color={c.muted}>{session?.user.email}</T>
+          {streak > 0 ? <T size={15} weight="black" color={c.orangeInk}>{streak}-day streak</T> : null}
         </View>
       </View>
 
@@ -131,6 +148,10 @@ export default function You() {
 
       <Kicker>Account</Kicker>
       <Button label="Log out" kind="plain" onPress={signOut} />
+      <Pressable accessibilityRole="button" onPress={confirmDelete} style={{ alignSelf: 'center', padding: 8 }}>
+        <T size={15} weight="black" color={c.redInk}>Delete account</T>
+      </Pressable>
+      {deleteError ? <T size={14} color={c.redInk}>{deleteError}</T> : null}
     </Screen>
   );
 }

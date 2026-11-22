@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import type { Session } from '@supabase/supabase-js';
+import * as Linking from 'expo-linking';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { supabase } from '@/lib/supabase';
@@ -21,6 +22,11 @@ type Auth = {
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
   savePrefs: (patch: Prefs) => Promise<string | null>;
+  deleteAccount: () => Promise<string | null>;
+  sendResetLink: (email: string) => Promise<string | null>;
+  /** Signs in with the tokens from a reset email link. */
+  startRecovery: (accessToken: string, refreshToken: string) => Promise<string | null>;
+  setNewPassword: (password: string) => Promise<string | null>;
 };
 
 const PROFILE_KEY = 'tquest.profile.v1';
@@ -40,6 +46,8 @@ function friendly(msg: string): string {
   if (/database error saving new user/i.test(msg)) return 'That username is taken.';
   if (/password should be/i.test(msg)) return 'Password needs at least 6 characters.';
   if (/invalid.*email|email.*invalid/i.test(msg)) return 'Enter a valid email.';
+  if (/rate limit|security purposes/i.test(msg)) return 'Too many emails. Wait a few minutes and try again.';
+  if (/different from the old/i.test(msg)) return 'Pick a password you haven’t used before.';
   if (/network|fetch/i.test(msg)) return 'Can’t reach TQuest. Check your connection.';
   return msg;
 }
@@ -134,9 +142,34 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     AsyncStorage.removeItem(PROFILE_KEY).catch(() => {});
   }, []);
 
+  const deleteAccount = useCallback(async () => {
+    const id = userId;
+    const { error } = await supabase.rpc('delete_account');
+    if (error) return friendly(error.message);
+    if (id) AsyncStorage.removeItem(`tquest.game.v1.${id}`).catch(() => {});
+    await signOut();
+    return null;
+  }, [userId, signOut]);
+
+  const sendResetLink = useCallback(async (email: string) => {
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: Linking.createURL('/reset-password') });
+    return error ? friendly(error.message) : null;
+  }, []);
+
+  const startRecovery = useCallback(async (accessToken: string, refreshToken: string) => {
+    const { error } = await supabase.auth.setSession({ access_token: accessToken, refresh_token: refreshToken });
+    return error ? 'This link is invalid or expired. Request a new one.' : null;
+  }, []);
+
+  const setNewPassword = useCallback(async (password: string) => {
+    if (password.length < 6) return 'Password needs at least 6 characters.';
+    const { error } = await supabase.auth.updateUser({ password });
+    return error ? friendly(error.message) : null;
+  }, []);
+
   const value = useMemo<Auth>(
-    () => ({ ready, session, profile, onboarded: !!profile?.prefs.onboarded, signUp, signIn, signOut, savePrefs }),
-    [ready, session, profile, signUp, signIn, signOut, savePrefs]
+    () => ({ ready, session, profile, onboarded: !!profile?.prefs.onboarded, signUp, signIn, signOut, savePrefs, deleteAccount, sendResetLink, startRecovery, setNewPassword }),
+    [ready, session, profile, signUp, signIn, signOut, savePrefs, deleteAccount, sendResetLink, startRecovery, setNewPassword]
   );
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>;
 }

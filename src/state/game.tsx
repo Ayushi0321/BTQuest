@@ -33,11 +33,11 @@ function uuid(): string {
   });
 }
 
-type Stats = { points: number; week: number; month: number };
+type Stats = { points: number; week: number; month: number; streak: number; weekArt: number };
 type Op = { kind: 'pull'; card: OwnedCard } | { kind: 'art'; stationId: string };
 type Saved = { cards: OwnedCard[]; artFound: Record<string, boolean>; stats: Stats; queue: Op[] };
 
-const EMPTY: Saved = { cards: [], artFound: {}, stats: { points: 0, week: 0, month: 0 }, queue: [] };
+const EMPTY: Saved = { cards: [], artFound: {}, stats: { points: 0, week: 0, month: 0, streak: 0, weekArt: 0 }, queue: [] };
 const storageKey = (uid: string) => `tquest.game.v1.${uid}`;
 const opId = (op: Op) => (op.kind === 'pull' ? op.card.uid : 'art:' + op.stationId);
 const opPoints = (op: Op) => (op.kind === 'pull' ? PULL_POINTS : ART_POINTS);
@@ -48,6 +48,9 @@ type Game = {
   points: number;
   weekPoints: number;
   monthPoints: number;
+  streak: number;
+  /** Artwork stamps found since Monday, for the weekly challenge. */
+  weekArt: number;
   artFound: Record<string, boolean>;
   /** Pulls waiting to reach the server. */
   pending: number;
@@ -67,11 +70,11 @@ async function fetchServer(): Promise<ServerData | null> {
     supabase.rpc('my_stats'),
   ]);
   if (c.error || a.error || s.error) return null;
-  const st = s.data as { points: number; week_points: number; month_points?: number };
+  const st = s.data as { points: number; week_points: number; month_points?: number; streak?: number; week_art?: number };
   return {
     cards: c.data.map((r) => ({ uid: r.uid, stationId: r.station_id, seed: r.seed, rarity: r.rarity as Rarity, place: r.place ?? undefined, placeCode: r.place_code ?? undefined })),
     art: a.data.map((r) => r.station_id as string),
-    stats: { points: st.points, week: st.week_points, month: st.month_points ?? 0 },
+    stats: { points: st.points, week: st.week_points, month: st.month_points ?? 0, streak: st.streak ?? 0, weekArt: st.week_art ?? 0 },
   };
 }
 
@@ -139,10 +142,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
           ...d,
           queue: d.queue.filter((o) => opId(o) !== id),
           cards: res.error && op.kind === 'pull' ? d.cards.filter((c) => c.uid !== id) : d.cards,
-          stats: { points: d.stats.points + gained, week: d.stats.week + gained, month: d.stats.month + gained },
+          stats: { ...d.stats, points: d.stats.points + gained, week: d.stats.week + gained, month: d.stats.month + gained, weekArt: d.stats.weekArt + (op.kind === 'art' && gained ? 1 : 0) },
         }));
         queue = queue.slice(1);
         if (!queue.length) queue = latest.current.queue.filter((o) => !done.has(opId(o)));
+      }
+      if (done.size) {
+        const server = await fetchServer();
+        if (server) update((d) => mergeServer(d, server));
       }
     } finally {
       flushing.current = false;
@@ -201,11 +208,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Game>(() => {
     const extra = data.queue.reduce((n, op) => n + opPoints(op), 0);
+    const queuedArt = data.queue.filter((op) => op.kind === 'art').length;
     return {
       cards: data.cards,
       points: data.stats.points + extra,
       weekPoints: data.stats.week + extra,
       monthPoints: data.stats.month + extra,
+      streak: data.stats.streak,
+      weekArt: data.stats.weekArt + queuedArt,
       artFound: data.artFound,
       pending: data.queue.length,
       pull,
