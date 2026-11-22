@@ -1,10 +1,10 @@
 /**
- * useDemoTrip(line, from, to): fake ride for demos (EXPO_PUBLIC_DEMO_MODE=1).
+ * useDemoTrip(line, from, to, startedAt): fake ride for demos (EXPO_PUBLIC_DEMO_MODE=1).
  *
  * Same return shape as the live useTrip, so screens don't know the difference.
  * No network, no GPS: a pretend train starts at `from` and reaches the next
  * stop every STEP_MS (20 s), firing onArrive at each one, until `to`.
- * Changing `from`/`to` restarts the ride. The fake `train` glides between
+ * The schedule counts from the check-in time and collected stops are saved, so reopening the app carries on. The fake `train` glides between
  * station coordinates so the map has something to show.
  *
  * Don't import this directly. Use `useTrip` from '@/hooks/useTrip', which
@@ -16,6 +16,7 @@ import type { Train } from '@/api/mbta';
 import { COORDS, type LineId } from '@/data/lines';
 import type { TripResult } from '@/hooks/useTrip';
 import { planTrip } from '@/lib/linePlan';
+import { loadRideProgress, saveRideProgress } from '@/lib/rideProgress';
 
 const STEP_MS = 20_000;
 
@@ -47,10 +48,10 @@ function demoTrain(stops: string[], i: number, t: number, direction: Train['dire
   };
 }
 
-export function useDemoTrip(line: LineId, from: string, to: string): TripResult {
+export function useDemoTrip(line: LineId, from: string, to: string, startedAt: number): TripResult {
   const plan = useMemo(() => planTrip(line, from, to), [line, from, to]);
   const stops = 'error' in plan ? null : plan.stops;
-  const key = `${line}:${from}>${to}`;
+  const key = `${line}:${from}>${to}:${startedAt}`;
 
   const [demo, setDemo] = useState<DemoState | null>(null);
   const listenersRef = useRef(new Set<(stationId: string) => void>());
@@ -60,18 +61,22 @@ export function useDemoTrip(line: LineId, from: string, to: string): TripResult 
     if (!stops || 'error' in plan) return;
     const direction = plan.direction;
     const last = stops.length - 1;
-    const startedAt = Date.now();
-    const fired = new Set<string>();
+    let fired = new Set<string>();
+    let interval: ReturnType<typeof setInterval> | undefined;
+    let first: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
 
     const update = () => {
       const elapsed = Date.now() - startedAt;
       const reachedIdx = Math.min(last, Math.floor(elapsed / STEP_MS));
 
       // Fire once per station after `from`, in order.
+      let changed = false;
       for (let i = 1; i <= reachedIdx; i++) {
         const id = stops[i];
         if (fired.has(id)) continue;
         fired.add(id);
+        changed = true;
         for (const cb of listenersRef.current) {
           try {
             cb(id);
@@ -80,21 +85,27 @@ export function useDemoTrip(line: LineId, from: string, to: string): TripResult 
           }
         }
       }
+      if (changed) saveRideProgress({ id: key, fired: [...fired], passedAt: {} });
 
       const secondsToNextStop =
         reachedIdx >= last ? undefined : Math.max(0, Math.ceil(((reachedIdx + 1) * STEP_MS - elapsed) / 1000));
       const train = demoTrain(stops, reachedIdx, (elapsed % STEP_MS) / STEP_MS, direction);
       setDemo({ key, reachedIdx, secondsToNextStop, train, startedAt });
-      if (reachedIdx >= last) clearInterval(interval);
+      if (reachedIdx >= last && interval) clearInterval(interval);
     };
 
-    const interval = setInterval(update, 1000);
-    const first = setTimeout(update, 0);
+    loadRideProgress(key).then((saved) => {
+      if (cancelled) return;
+      fired = new Set(saved?.fired ?? []);
+      interval = setInterval(update, 1000);
+      first = setTimeout(update, 0);
+    });
     return () => {
-      clearInterval(interval);
-      clearTimeout(first);
+      cancelled = true;
+      if (interval) clearInterval(interval);
+      if (first) clearTimeout(first);
     };
-  }, [key, stops, plan]);
+  }, [key, stops, plan, startedAt]);
 
   const onArrive = useCallback((cb: (stationId: string) => void) => {
     const listeners = listenersRef.current;

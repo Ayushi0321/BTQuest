@@ -18,8 +18,10 @@ import { nearbyLine } from '@/data/offline';
 import { stationById } from '@/data/stations';
 import { useAlerts } from '@/hooks/useAlerts';
 import { DEMO_MODE, useTrip } from '@/hooks/useTrip';
+import { useRideDetector } from '@/hooks/useRideDetector';
 import { useTrains } from '@/hooks/useTrains';
 import { planTrip } from '@/lib/linePlan';
+import { clearRideProgress } from '@/lib/rideProgress';
 import { useFeedback } from '@/state/feedback';
 import { useGame, type OwnedCard } from '@/state/game';
 import { font } from '@/theme/colors';
@@ -49,6 +51,21 @@ export default function Ride() {
   const [checkin, setCheckin] = useState<Checkin | null>(null);
   const [finished, setFinished] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [picker, setPicker] = useState<{ key: number; initial?: { line: LineId; from?: string } }>({ key: 0 });
+  const { announce } = useFeedback();
+  const { c } = useAppTheme();
+  const insets = useSafeAreaInsets();
+  const { guess, dismiss } = useRideDetector(!DEMO_MODE && loaded && (!checkin || finished));
+
+  const openPicker = (initial?: { line: LineId; from?: string }) => {
+    setPicker((p) => ({ key: p.key + 1, initial }));
+    setPicking(true);
+  };
+
+  useEffect(() => {
+    if (!guess) return;
+    announce({ kind: 'info', text: `Riding the ${lineById(guess.line).name}? Check in to collect.`, speak: `Looks like you're riding the ${lineById(guess.line).name}. Check in to collect cards.`, buzz: 'tap' });
+  }, [guess, announce]);
 
   useEffect(() => {
     AsyncStorage.getItem(CHECKIN_KEY)
@@ -67,15 +84,18 @@ export default function Ride() {
     setCheckin(next);
     setFinished(false);
     setPicking(false);
+    clearRideProgress();
     AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(next)).catch(() => {});
   };
   const endRide = useCallback(() => {
     setCheckin(null);
     setFinished(false);
+    clearRideProgress();
     AsyncStorage.removeItem(CHECKIN_KEY).catch(() => {});
   }, []);
   const onFinished = useCallback(() => {
     setFinished(true);
+    clearRideProgress();
     AsyncStorage.removeItem(CHECKIN_KEY).catch(() => {});
   }, []);
 
@@ -87,14 +107,26 @@ export default function Ride() {
           key={`${checkin.line}:${checkin.from}>${checkin.to}:${checkin.at}`}
           checkin={checkin}
           finished={finished}
-          onCheckIn={() => setPicking(true)}
+          onCheckIn={() => openPicker()}
           onEnd={endRide}
           onFinished={onFinished}
         />
       ) : (
-        <CheckInPrompt onCheckIn={() => setPicking(true)} />
+        <CheckInPrompt onCheckIn={() => openPicker()} />
       )}
-      <TripPicker visible={picking} onClose={() => setPicking(false)} onPick={checkIn} />
+      {guess ? (
+        <View style={{ position: 'absolute', top: insets.top + 64, left: 14, right: 14 }}>
+          <Card style={{ gap: 10 }}>
+            <T size={17} weight="black">Riding the {lineById(guess.line).name}?</T>
+            <T size={14} color={c.muted}>Looks like you’re on a train toward {guess.train.headsign ?? lineById(guess.line).toward(guess.train.direction, guess.stationId)}. Check in to collect a card at every stop.</T>
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Button label="Not now" kind="plain" style={{ flex: 1 }} onPress={dismiss} />
+              <Button label="Check in" kind="green" style={{ flex: 1 }} onPress={() => { dismiss(); openPicker({ line: guess.line, from: guess.stationId }); }} />
+            </View>
+          </Card>
+        </View>
+      ) : null}
+      <TripPicker key={picker.key} initial={picker.initial} visible={picking} onClose={() => setPicking(false)} onPick={checkIn} />
     </>
   );
 }
@@ -122,7 +154,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
   const line = lineById(checkin.line);
   const lc = lineColors(c, line);
   const tripKey = `${line.id}:${from}>${to}`;
-  const trip = useTrip(line.id, from, to);
+  const trip = useTrip(line.id, from, to, checkin.at);
   const { trains } = useTrains(line.id);
   const { alerts } = useAlerts(line.id);
   const { pull, artFound, cards, points } = useGame();

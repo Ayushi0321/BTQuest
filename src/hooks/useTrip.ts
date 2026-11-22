@@ -1,7 +1,10 @@
 /**
- * useTrip(line, from, to): live tracker for "my ride" on any line in data/lines.ts.
+ * useTrip(line, from, to, startedAt): live tracker for "my ride" on any line in data/lines.ts.
  *
- *   const trip = useTrip('Red', 'DAV', 'SST');
+ *   const trip = useTrip('Red', 'DAV', 'SST', checkin.at);
+ *
+ * Progress (stations collected, the locked train) is saved per check-in, so closing the
+ * app fully and reopening it carries on the same ride.
  *   useEffect(() => trip.onArrive((stationId) => setPulled(pull(stationId))), [trip.onArrive]);
  *
  * Returns everything the Ride screen needs:
@@ -50,6 +53,7 @@ import { useDemoTrip } from '@/hooks/useDemoTrip';
 import { useNow } from '@/hooks/useNow';
 import { usePolling } from '@/hooks/usePolling';
 import { planTrip } from '@/lib/linePlan';
+import { loadRideProgress, saveRideProgress } from '@/lib/rideProgress';
 import { newMemory, tick, type GpsFix, type Memory, type Snapshot, type TripSource } from '@/lib/tripTracker';
 
 export type { TripSource } from '@/lib/tripTracker';
@@ -123,10 +127,32 @@ function useGpsRef(active: boolean): RefObject<GpsFix | null> {
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-function useLiveTrip(line: LineId, from: string, to: string): TripResult {
+async function restoreMemory(key: string): Promise<Memory> {
+  const mem = newMemory(key);
+  const saved = await loadRideProgress(key);
+  if (saved) {
+    mem.fired = new Set(saved.fired);
+    mem.passedAt = Object.fromEntries(Object.entries(saved.passedAt).map(([id, t]) => [id, new Date(t)]));
+    mem.lockedId = saved.lockedId;
+    mem.lockedSource = (saved.lockedSource as TripSource | undefined) ?? 'none';
+  }
+  return mem;
+}
+
+function persistMemory(mem: Memory): void {
+  saveRideProgress({
+    id: mem.key,
+    fired: [...mem.fired],
+    passedAt: Object.fromEntries(Object.entries(mem.passedAt).map(([id, d]) => [id, d.getTime()])),
+    lockedId: mem.lockedId,
+    lockedSource: mem.lockedSource,
+  });
+}
+
+function useLiveTrip(line: LineId, from: string, to: string, startedAt: number): TripResult {
   const plan = useMemo(() => planTrip(line, from, to), [line, from, to]);
   const planError = 'error' in plan ? plan.error : undefined;
-  const key = `${line}:${from}>${to}`;
+  const key = `${line}:${from}>${to}:${startedAt}`;
 
   const isFocused = useIsFocused();
   const gpsRef = useGpsRef(isFocused && !planError);
@@ -136,9 +162,11 @@ function useLiveTrip(line: LineId, from: string, to: string): TripResult {
   const fetcher = useCallback(async (): Promise<Snapshot | null> => {
     if ('error' in plan) return null;
     if (!memRef.current || memRef.current.key !== key) {
-      memRef.current = newMemory(key);
+      memRef.current = await restoreMemory(key);
     }
-    return tick(plan, memRef.current, gpsRef.current, listenersRef.current);
+    const snap = await tick(plan, memRef.current, gpsRef.current, listenersRef.current);
+    persistMemory(memRef.current);
+    return snap;
   }, [plan, key, gpsRef]);
 
   const { data, loading, error } = usePolling(fetcher, POLL_MS, key);
@@ -184,4 +212,4 @@ function useLiveTrip(line: LineId, from: string, to: string): TripResult {
  * safe for the rules of hooks: DEMO_MODE is a build-time constant, so every
  * render of every component always calls the same hook.
  */
-export const useTrip: (line: LineId, from: string, to: string) => TripResult = DEMO_MODE ? useDemoTrip : useLiveTrip;
+export const useTrip: (line: LineId, from: string, to: string, startedAt: number) => TripResult = DEMO_MODE ? useDemoTrip : useLiveTrip;
