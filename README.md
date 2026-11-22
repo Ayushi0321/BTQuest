@@ -1,8 +1,8 @@
-# TQuest
+# BTQuest
 
 **Your commute, but make it a quest.**
 
-TQuest turns a ride on Boston's MBTA into a game. Check in, and the app follows your actual train live. It tells you your stops the way that works for you (big text, voice, or vibration), and every station you reach opens a pack of hand-painted collectible stamp cards. Scan TQuest signs at Boston landmarks for bonus cards, ask Questie (our AI guide) anything about the city, and duel other riders on your train.
+BTQuest turns a ride on Boston's MBTA into a game. Check in, and the app follows your actual train live. It tells you your stops the way that works for you (big text, voice, or vibration), and every station you reach opens a pack of hand-painted collectible stamp cards. Scan TQuest signs at Boston landmarks for bonus cards, ask Questie (our AI guide) anything about the city, and duel other riders on your train.
 
 Built at BostonHacks by [Team names].
 
