@@ -174,7 +174,7 @@ src/
 supabase/migrations/   Database schema, security policies and server functions
 assets/                Icons, splash, paper texture, sfx/ (duel sound effects)
 ```
-[![Architecture diagram](https://gitdiagram.com/diagram-badge.svg)](https://gitdiagram.com/daisynbn/tquest?utm_source=readme&utm_medium=badge)
+[![Architecture diagram of daisynbn/tquest](https://gitdiagram.com/daisynbn/tquest/diagram.png)](https://gitdiagram.com/daisynbn/tquest?utm_source=readme&utm_medium=picture)
 ---
 
 ## QR stamp spots
