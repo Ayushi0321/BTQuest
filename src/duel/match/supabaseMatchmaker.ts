@@ -26,6 +26,10 @@ export class SupabaseMatchmaker implements Matchmaker {
   private channel: RealtimeChannel | null = null;
   private busy = false;
   private again = false;
+  // supabase.channel(topic) hands back a channel that's still closing, and adding listeners to it throws.
+  // So opening waits for the last removal, and gen lets a newer start/stop cancel an older one.
+  private removing: Promise<unknown> = Promise.resolve();
+  private gen = 0;
 
   constructor(private supabase: SupabaseClient, private userId: string) {}
 
@@ -34,27 +38,40 @@ export class SupabaseMatchmaker implements Matchmaker {
 
   /** Throws if the server isn't reachable or the SQL isn't installed — the hook then falls back to demo. */
   async start(p: JoinParams) {
+    const gen = ++this.gen;
     this.params = p;
     await this.join(true);
+    if (gen !== this.gen) return;
     if (!this.beat) this.beat = setInterval(() => { void this.join(); }, HEARTBEAT_MS);
-    if (!this.channel) {
-      const refresh = () => { void this.join(); };
-      this.channel = this.supabase
-        .channel(`duel-matches-${this.userId}`)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'duel_matches', filter: `player_a=eq.${this.userId}` }, refresh)
-        .on('postgres_changes', { event: '*', schema: 'public', table: 'duel_matches', filter: `player_b=eq.${this.userId}` }, refresh)
-        .subscribe();
-    }
+    if (!this.channel) await this.openChannel(gen);
+  }
+
+  private async openChannel(gen: number) {
+    const topic = `duel-matches-${this.userId}`;
+    await this.removing;
+    // Leftover from an earlier matchmaker (e.g. the Ride screen remounted on a new check-in).
+    const stale = this.supabase.getChannels().find((c) => c.topic === `realtime:${topic}`);
+    if (stale) await this.supabase.removeChannel(stale).catch(() => undefined);
+    if (gen !== this.gen || this.channel) return;
+    const refresh = () => { void this.join(); };
+    this.channel = this.supabase
+      .channel(topic)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duel_matches', filter: `player_a=eq.${this.userId}` }, refresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'duel_matches', filter: `player_b=eq.${this.userId}` }, refresh)
+      .subscribe();
   }
 
   async stop() {
+    const gen = ++this.gen;
     if (this.beat) clearInterval(this.beat);
     this.beat = null;
-    if (this.channel) await this.supabase.removeChannel(this.channel);
+    const channel = this.channel;
     this.channel = null;
     this.params = null;
+    if (channel) this.removing = this.supabase.removeChannel(channel).catch(() => undefined);
     try { await this.supabase.rpc('duel_leave'); } catch {}
-    this.store.set({ phase: 'off', offer: null, looking: 0, restingUntil: null, error: null });
+    // A start() that ran meanwhile owns the state now.
+    if (gen === this.gen) this.store.set({ phase: 'off', offer: null, looking: 0, restingUntil: null, error: null });
   }
 
   async respond(accept: boolean) {
