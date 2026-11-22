@@ -54,3 +54,11 @@ export const STATIONS: Station[] = [
 
 export const stationById = (id: string): Station | undefined => STATIONS.find((s) => s.id === id);
 export const stationByMbtaId = (mbtaId: string): Station | undefined => STATIONS.find((s) => s.mbtaId === mbtaId);
+
+/** The station whose mascot represents a rider: their favorite, or one picked from their username. */
+export function riderMascot(fav: string | null | undefined, username: string): string {
+  if (fav && stationById(fav)) return fav;
+  let h = 0;
+  for (const ch of username.toLowerCase()) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return STATIONS[Math.abs(h) % STATIONS.length].id;
+}

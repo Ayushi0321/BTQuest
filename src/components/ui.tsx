@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
-import { useState, type ReactNode } from 'react';
-import { Pressable, ScrollView, Text, View, type TextStyle, type ViewStyle } from 'react-native';
+import { useState, type ReactElement, type ReactNode } from 'react';
+import { Pressable, ScrollView, Text, View, type RefreshControlProps, type TextStyle, type ViewStyle } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Questie } from '@/components/Questie';
@@ -10,7 +10,7 @@ import { useAppTheme } from '@/theme/ThemeContext';
 
 // Shared building blocks in the chunky, Duolingo-like style of the design.
 
-export function Screen({ title, right, children, scroll = true, questie = true }: { title?: string; right?: ReactNode; children: ReactNode; scroll?: boolean; questie?: boolean }) {
+export function Screen({ title, right, children, scroll = true, questie = true, refreshControl, footer }: { title?: string; right?: ReactNode; children: ReactNode; scroll?: boolean; questie?: boolean; refreshControl?: ReactElement<RefreshControlProps>; footer?: ReactNode }) {
   const { c } = useAppTheme();
   const body = <View style={{ padding: 18, gap: 14, paddingBottom: 40 }}>{children}</View>;
   return (
@@ -24,7 +24,8 @@ export function Screen({ title, right, children, scroll = true, questie = true }
           </View>
         </View>
       ) : null}
-      {scroll ? <ScrollView showsVerticalScrollIndicator={false}>{body}</ScrollView> : body}
+      {scroll ? <ScrollView showsVerticalScrollIndicator={false} refreshControl={refreshControl}>{body}</ScrollView> : body}
+      {footer}
     </SafeAreaView>
   );
 }

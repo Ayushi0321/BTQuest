@@ -136,8 +136,7 @@ function Artwork() {
 
 function Raffle() {
   const { c } = useAppTheme();
-  const { points } = useGame();
-  const monthPts = points - 640; // demo: points earned this month
+  const { monthPoints: monthPts } = useGame();
   const tickets = Math.floor(monthPts / 100);
   const into = monthPts % 100;
   return (
