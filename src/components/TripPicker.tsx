@@ -1,6 +1,7 @@
 /**
  * TripPicker: check in for a ride. Pick the line, then "From", then "To".
  * Only destinations reachable without changing trains are listed.
+ * `initial` skips ahead (e.g. when we guessed the rider's line and station). Remount with a new `key` to apply it.
  */
 import { useState } from 'react';
 import { Modal, Pressable, ScrollView, Text, View } from 'react-native';
@@ -14,15 +15,16 @@ import { useAppTheme } from '@/theme/ThemeContext';
 
 type Props = {
   visible: boolean;
+  initial?: { line: LineId; from?: string };
   onPick: (line: LineId, from: string, to: string) => void;
   onClose: () => void;
 };
 
-export function TripPicker({ visible, onPick, onClose }: Props) {
+export function TripPicker({ visible, initial, onPick, onClose }: Props) {
   const { c } = useAppTheme();
   const insets = useSafeAreaInsets();
-  const [lineId, setLineId] = useState<LineId | null>(null);
-  const [from, setFrom] = useState<string | null>(null);
+  const [lineId, setLineId] = useState<LineId | null>(initial?.line ?? null);
+  const [from, setFrom] = useState<string | null>(initial?.from ?? null);
 
   const reset = () => {
     setLineId(null);
