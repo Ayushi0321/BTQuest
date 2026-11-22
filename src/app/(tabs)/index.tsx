@@ -13,13 +13,11 @@ import { QuestieBubble } from '@/components/QuestieBubble';
 import { RecenterButton, RideMap } from '@/components/RideMap';
 import { TripPicker } from '@/components/TripPicker';
 import { AskQuestieButton, Button, Card, Kicker, Screen, T } from '@/components/ui';
-import { lineById, lineColors, type LineId } from '@/data/lines';
+import { lineById, type LineId } from '@/data/lines';
 import { nearbyLine } from '@/data/offline';
 import { stationById } from '@/data/stations';
-import { useAlerts } from '@/hooks/useAlerts';
-import { DEMO_MODE, useTrip } from '@/hooks/useTrip';
 import { useRideDetector } from '@/hooks/useRideDetector';
-import { useTrains } from '@/hooks/useTrains';
+import { DEMO_MODE, useTrip } from '@/hooks/useTrip';
 import { planTrip } from '@/lib/linePlan';
 import { clearRideProgress } from '@/lib/rideProgress';
 import { useFeedback } from '@/state/feedback';
@@ -150,13 +148,12 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
   const { c, toggle, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { settings, setSetting, announce } = useFeedback();
-  const { from, to } = checkin;
-  const line = lineById(checkin.line);
-  const lc = lineColors(c, line);
-  const tripKey = `${line.id}:${from}>${to}`;
-  const trip = useTrip(line.id, from, to, checkin.at);
-  const { trains } = useTrains(line.id);
-  const { alerts } = useAlerts(line.id);
+  const [[from, to], setTrip] = useState<[string, string]>(['DAV', 'SST']);
+  const tripKey = `${from}>${to}`;
+  const [picking, setPicking] = useState(false);
+  const trip = useTrip(from, to);
+  const { trains } = useRedLineTrains();
+  const { alerts } = useRedLineAlerts();
   const { pull, artFound, cards, points } = useGame();
 
   useEffect(() => {
@@ -287,11 +284,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
             Motion comfort is on. Eyes up, we’ll talk and buzz you through the ride.
           </T>
           {nextId ? <Button label="Hear it again" kind="blue" style={{ marginTop: 14, alignSelf: 'stretch' }} onPress={() => announceNext(nextId)} /> : null}
-          {trip.arrived ? (
-            <Button label="Check in again" kind="green" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onCheckIn} />
-          ) : (
-            <Button label="End ride" kind="plain" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onEnd} />
-          )}
+          <Button label={`${stationById(from)?.name} → ${stationById(to)?.name}: change trip`} kind="plain" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={() => setPicking(true)} />
         </Card>
         {overlays}
       </Screen>
@@ -429,6 +422,18 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
                 </Text>
               </Pressable>
             </View>
+
+            {trainRoom.riders.length > 0 ? (
+              <Card style={{ paddingVertical: 8 }}>
+                <Kicker>Riders on your train</Kicker>
+                {trainRoom.riders.map((rider) => (
+                  <View key={rider.riderId} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 8 }}>
+                    <T size={15} weight="black" style={{ flex: 1 }}>{rider.nickname}</T>
+                    <Button label="Invite" kind="gold" style={{ minHeight: 44, paddingHorizontal: 14 }} onPress={() => trainRoom.transport.sendInviteTo?.(rider.riderId)} />
+                  </View>
+                ))}
+              </Card>
+            ) : null}
 
             {bigAlert ? (
               <View style={{ backgroundColor: c.goldTint, borderRadius: 18, padding: 14, gap: 4 }}>
