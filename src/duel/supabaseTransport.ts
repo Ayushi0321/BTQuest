@@ -40,13 +40,31 @@ export class SupabaseDuelTransport implements DuelTransport {
   private readonly opponentLeftListeners = new Set<() => void>();
   private readonly duelStartedListeners = new Set<(state: DuelState) => void>();
 
+  // supabase.channel(topic) returns any channel already registered under that
+  // topic, and removeChannel() only unregisters it once the server confirms the
+  // close. Re-joining before that finishes would hand us the old, already
+  // subscribed channel, and adding listeners to it throws. So every join waits
+  // for the previous removal, and a newer join/leave cancels an older join.
+  private removing: Promise<unknown> = Promise.resolve();
+  private joinToken = 0;
+
   constructor(private readonly sessionId: string) {}
 
   joinTrainRoom(trainId: string, me: PublicRider): void {
-    if (this.channel && this.trainId === trainId) return;
+    if (this.trainId === trainId) return;
     this.leaveTrainRoom();
     this.trainId = trainId;
     this.me = me;
+    const token = ++this.joinToken;
+    void this.openChannel(trainId, token);
+  }
+
+  private async openChannel(trainId: string, token: number): Promise<void> {
+    await this.removing;
+    // A leftover channel on this topic (e.g. from a previous transport instance).
+    const stale = supabase.getChannels().find((c) => c.topic === `realtime:train:${trainId}`);
+    if (stale) await supabase.removeChannel(stale).catch(() => undefined);
+    if (token !== this.joinToken) return;
 
     this.channel = supabase.channel(`train:${trainId}`, {
       config: {
@@ -83,9 +101,11 @@ export class SupabaseDuelTransport implements DuelTransport {
         payload: { from: this.sessionId, to: this.opponent.riderId, matchId } satisfies RoomPayload,
       });
     }
+    this.joinToken++;
     if (this.channel) {
-      void this.channel.untrack();
-      void supabase.removeChannel(this.channel);
+      const channel = this.channel;
+      void channel.untrack();
+      this.removing = supabase.removeChannel(channel).catch(() => undefined);
     }
     for (const timer of this.pickTimers.values()) clearTimeout(timer);
     this.pickTimers.clear();
