@@ -7,9 +7,10 @@ import { Pressable, ScrollView, Text, useWindowDimensions, View } from 'react-na
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import {
-  ChargePhase, ClashArena, DuelResult, HandPicker, ScorePill, makeFighter,
+  ChargePhase, ClashArena, DuelInvite, DuelMatchmaker, DuelResult, HandPicker, ScorePill, makeFighter,
   type DuelCardView,
 } from '@/duel/ui';
+import { finishCurrentMatch } from '@/duel/match';
 import { font } from '@/theme/colors';
 import { useAppTheme } from '@/theme/ThemeContext';
 
@@ -21,8 +22,8 @@ const HAND: DuelCardView[] = [
 const OPP_CARD: DuelCardView = { uid: 'opp-1', stationId: 'SST', seed: 134, rarity: 'C', element: 'moon' };
 const OPP = 'Swift Ken #46';
 
-type Tab = 'pick' | 'sun' | 'storm' | 'moon' | 'clash' | 'result';
-const TABS: Tab[] = ['pick', 'sun', 'storm', 'moon', 'clash', 'result'];
+type Tab = 'match' | 'invite' | 'pick' | 'sun' | 'storm' | 'moon' | 'clash' | 'result';
+const TABS: Tab[] = ['match', 'invite', 'pick', 'sun', 'storm', 'moon', 'clash', 'result'];
 
 const CLASHES = {
   'Win': [60, 70],   // 60 + ⚡25 + 5 = 90 vs 70
@@ -39,6 +40,8 @@ export default function DuelLab() {
   const [run, setRun] = useState(0); // bump to restart the current step
   const [log, setLog] = useState('');
   const [clash, setClash] = useState<keyof typeof CLASHES>('Win');
+  const [invite, setInvite] = useState<'incoming' | 'outgoing' | null>(null);
+  const [duelMe, setDuelMe] = useState(false);
 
   const restart = () => setRun((r) => r + 1);
 
@@ -69,6 +72,45 @@ export default function DuelLab() {
         </View>
 
         <ScorePill you={1} opp={0} oppName={OPP} />
+
+        {tab === 'match' && (
+          <View style={{ width: W, gap: 10 }}>
+            <DuelMatchmaker
+              enabled={duelMe}
+              onToggle={setDuelMe}
+              line="red"
+              lineLabel="Red Line"
+              nickname="Daisy #1"
+              mascot="DAV"
+              demo
+              demoOptions={{ restMs: 8000 }}
+              onReady={(o) => setLog(`ready vs ${o.opponent.nickname}${o.isBot ? ' (bot)' : ''} → open the duel screen`)}
+            />
+            <Pressable onPress={() => { void finishCurrentMatch(); setLog('duel finished → short break'); }} style={{ alignSelf: 'flex-start', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, backgroundColor: c.card2 }}>
+              <Text style={{ fontFamily: font.black, fontSize: 14, color: c.text }}>Simulate duel finished</Text>
+            </Pressable>
+          </View>
+        )}
+
+        {tab === 'invite' && (
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {(['incoming', 'outgoing'] as const).map((m) => (
+              <Pressable key={m} onPress={() => setInvite(m)} style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 999, backgroundColor: c.blueBtn }}>
+                <Text style={{ fontFamily: font.black, fontSize: 15, color: '#fff' }}>Show {m}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+        <DuelInvite
+          visible={invite !== null}
+          mode={invite ?? 'incoming'}
+          name={OPP}
+          theirStationId="KEN"
+          myStationId="DAV"
+          onAccept={() => { setInvite(null); setLog('accepted → start duel'); setTab('pick'); restart(); }}
+          onDecline={() => { setInvite(null); setLog(invite === 'outgoing' ? 'invite cancelled' : 'declined'); }}
+          onExpire={() => { setInvite(null); setLog('invite expired'); }}
+        />
 
         {tab === 'pick' && (
           <HandPicker key={run} hand={HAND} opponentName={OPP} opponentReady={false} width={W} height={height - 220} onPlay={(card) => setLog(`played ${card.element} ${card.uid}`)} />
