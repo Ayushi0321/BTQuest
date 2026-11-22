@@ -1,7 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Pressable, Text, View } from 'react-native';
+import { Modal, Pressable, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Path } from 'react-native-svg';
 
@@ -52,6 +52,7 @@ export default function Ride() {
   const [checkin, setCheckin] = useState<Checkin | null>(null);
   const [finished, setFinished] = useState(false);
   const [picking, setPicking] = useState(false);
+  const [confirmSwitch, setConfirmSwitch] = useState(false);
   const [picker, setPicker] = useState<{ key: number; initial?: { line: LineId; from?: string } }>({ key: 0 });
   const { announce } = useFeedback();
   const { c } = useAppTheme();
@@ -108,7 +109,7 @@ export default function Ride() {
           key={`${checkin.line}:${checkin.from}>${checkin.to}:${checkin.at}`}
           checkin={checkin}
           finished={finished}
-          onCheckIn={() => openPicker()}
+          onCheckIn={() => (finished ? openPicker() : setConfirmSwitch(true))}
           onEnd={endRide}
           onFinished={onFinished}
         />
@@ -127,8 +128,37 @@ export default function Ride() {
           </Card>
         </View>
       ) : null}
+      {checkin ? (
+        <ConfirmSwitch
+          visible={confirmSwitch}
+          checkin={checkin}
+          onCancel={() => setConfirmSwitch(false)}
+          onConfirm={() => { setConfirmSwitch(false); openPicker(); }}
+        />
+      ) : null}
       <TripPicker key={picker.key} initial={picker.initial} visible={picking} onClose={() => setPicking(false)} onPick={checkIn} />
     </>
+  );
+}
+
+// Mid-ride trip switch: picking a new trip replaces the current one, so ask first.
+function ConfirmSwitch({ visible, checkin, onCancel, onConfirm }: { visible: boolean; checkin: Checkin; onCancel: () => void; onConfirm: () => void }) {
+  const { c } = useAppTheme();
+  return (
+    <Modal visible={visible} transparent animationType="fade" onRequestClose={onCancel}>
+      <View style={{ flex: 1, backgroundColor: c.scrim, justifyContent: 'center', padding: 18 }}>
+        <Card style={{ gap: 10 }}>
+          <T size={20} weight="black">Switch trip?</T>
+          <T size={15} color={c.muted}>
+            Your ride from {stationById(checkin.from)?.name} to {stationById(checkin.to)?.name} will be marked as completed. Cards you already collected stay in your album.
+          </T>
+          <View style={{ flexDirection: 'row', gap: 10, marginTop: 4 }}>
+            <Button label="Keep riding" kind="plain" style={{ flex: 1 }} onPress={onCancel} />
+            <Button label="Switch" kind="green" style={{ flex: 1 }} onPress={onConfirm} />
+          </View>
+        </Card>
+      </View>
+    </Modal>
   );
 }
 
@@ -292,7 +322,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
           {trip.arrived ? (
             <Button label="Check in again" kind="green" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onCheckIn} />
           ) : (
-            <Button label="End ride" kind="plain" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onEnd} />
+            <Button label="End ride" kind="red" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onEnd} />
           )}
         </Card>
         {overlays}
@@ -386,9 +416,7 @@ function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveP
                     <Button label="Check in again" kind="green" onPress={onCheckIn} />
                   </View>
                 ) : (
-                  <Pressable accessibilityRole="button" onPress={onEnd} hitSlop={8} style={{ alignSelf: 'flex-start' }}>
-                    <Text style={{ fontFamily: font.black, fontSize: 14, color: c.blueInk }}>End ride</Text>
-                  </Pressable>
+                  <Button label="End ride" kind="red" style={{ marginTop: 4 }} onPress={onEnd} />
                 )}
               </View>
             }>
