@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
@@ -12,11 +13,13 @@ import { QuestieBubble } from '@/components/QuestieBubble';
 import { RecenterButton, RideMap } from '@/components/RideMap';
 import { TripPicker } from '@/components/TripPicker';
 import { AskQuestieButton, Button, Card, Kicker, Screen, T } from '@/components/ui';
+import { lineById, lineColors, type LineId } from '@/data/lines';
 import { nearbyLine } from '@/data/offline';
 import { stationById } from '@/data/stations';
-import { useRedLineAlerts } from '@/hooks/useRedLineAlerts';
-import { useRedLineTrains } from '@/hooks/useRedLineTrains';
+import { useAlerts } from '@/hooks/useAlerts';
 import { DEMO_MODE, useTrip } from '@/hooks/useTrip';
+import { useTrains } from '@/hooks/useTrains';
+import { planTrip } from '@/lib/linePlan';
 import { useFeedback } from '@/state/feedback';
 import { useGame, type OwnedCard } from '@/state/game';
 import { font } from '@/theme/colors';
@@ -29,29 +32,104 @@ import { useAppTheme } from '@/theme/ThemeContext';
 // Announcements go through useFeedback().announce, so they follow the settings on
 // the You tab. Arriving at a station opens a stamp pack. EXPO_PUBLIC_DEMO_MODE=1
 // drives the same screen with a pretend train.
+// A ride starts with a check-in and ends when the train reaches your stop. Check in again to keep collecting.
 
 type Pulled = { card: OwnedCard; isNew: boolean };
+type Checkin = { line: LineId; from: string; to: string; at: number };
+
+const CHECKIN_KEY = 'tquest.checkin.v1';
+const CHECKIN_TTL_MS = 3 * 60 * 60 * 1000;
 
 const commas = (n: number) => String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const clock = (d?: Date) => (d ? `${d.getHours() % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')}` : '');
 
-function towardText(direction: 'south' | 'north', to: string) {
-  if (direction === 'north') return 'Alewife';
-  const branch = stationById(to)?.branch;
-  return branch === 'ashmont' ? 'Ashmont' : branch === 'braintree' ? 'Braintree' : 'Ashmont / Braintree';
-}
 
 export default function Ride() {
+  const [loaded, setLoaded] = useState(false);
+  const [checkin, setCheckin] = useState<Checkin | null>(null);
+  const [finished, setFinished] = useState(false);
+  const [picking, setPicking] = useState(false);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CHECKIN_KEY)
+      .then((raw) => {
+        const saved = raw ? (JSON.parse(raw) as Checkin) : null;
+        const fresh = !!saved && Date.now() - saved.at < CHECKIN_TTL_MS && !('error' in planTrip(saved.line, saved.from, saved.to));
+        if (fresh) setCheckin(saved);
+        else if (saved) AsyncStorage.removeItem(CHECKIN_KEY).catch(() => {});
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
+  }, []);
+
+  const checkIn = (line: LineId, from: string, to: string) => {
+    const next = { line, from, to, at: Date.now() };
+    setCheckin(next);
+    setFinished(false);
+    setPicking(false);
+    AsyncStorage.setItem(CHECKIN_KEY, JSON.stringify(next)).catch(() => {});
+  };
+  const endRide = useCallback(() => {
+    setCheckin(null);
+    setFinished(false);
+    AsyncStorage.removeItem(CHECKIN_KEY).catch(() => {});
+  }, []);
+  const onFinished = useCallback(() => {
+    setFinished(true);
+    AsyncStorage.removeItem(CHECKIN_KEY).catch(() => {});
+  }, []);
+
+  if (!loaded) return null;
+  return (
+    <>
+      {checkin ? (
+        <ActiveRide
+          key={`${checkin.line}:${checkin.from}>${checkin.to}:${checkin.at}`}
+          checkin={checkin}
+          finished={finished}
+          onCheckIn={() => setPicking(true)}
+          onEnd={endRide}
+          onFinished={onFinished}
+        />
+      ) : (
+        <CheckInPrompt onCheckIn={() => setPicking(true)} />
+      )}
+      <TripPicker visible={picking} onClose={() => setPicking(false)} onPick={checkIn} />
+    </>
+  );
+}
+
+function CheckInPrompt({ onCheckIn }: { onCheckIn: () => void }) {
+  const { c } = useAppTheme();
+  return (
+    <Screen title="Ride">
+      <View style={{ alignItems: 'center', gap: 16, paddingTop: 40 }}>
+        <QuestieBubble text="Where are we riding? Check in at your station and I’ll follow your train. Every stop drops a card." />
+        <Button label="Check in" kind="green" style={{ alignSelf: 'stretch' }} onPress={onCheckIn} />
+        <T size={14} color={c.muted} style={{ textAlign: 'center' }}>Red Line and Green Line B</T>
+      </View>
+    </Screen>
+  );
+}
+
+type ActiveProps = { checkin: Checkin; finished: boolean; onCheckIn: () => void; onEnd: () => void; onFinished: () => void };
+
+function ActiveRide({ checkin, finished, onCheckIn, onEnd, onFinished }: ActiveProps) {
   const { c, toggle, isDark } = useAppTheme();
   const insets = useSafeAreaInsets();
   const { settings, setSetting, announce } = useFeedback();
-  const [[from, to], setTrip] = useState<[string, string]>(['DAV', 'SST']);
-  const tripKey = `${from}>${to}`;
-  const [picking, setPicking] = useState(false);
-  const trip = useTrip(from, to);
-  const { trains } = useRedLineTrains();
-  const { alerts } = useRedLineAlerts();
+  const { from, to } = checkin;
+  const line = lineById(checkin.line);
+  const lc = lineColors(c, line);
+  const tripKey = `${line.id}:${from}>${to}`;
+  const trip = useTrip(line.id, from, to);
+  const { trains } = useTrains(line.id);
+  const { alerts } = useAlerts(line.id);
   const { pull, artFound, cards, points } = useGame();
+
+  useEffect(() => {
+    if (trip.arrived && !finished) onFinished();
+  }, [trip.arrived, finished, onFinished]);
 
   const [areaH, setAreaH] = useState(0);
   const peek = Math.round(areaH * 0.5);
@@ -117,17 +195,17 @@ export default function Ride() {
     setAsking(true);
     const id = mascotId;
     const st = stationById(id)!;
-    let line: string;
+    let reply: string;
     try {
-      line = await askGemini(
-        `The rider's train is heading into ${st.name} station on the Red Line. In 2 short spoken sentences, tell them one fun thing to see or do near ${st.name}, and remind them ${st.mascot}'s stamp is waiting there.`,
+      reply = await askGemini(
+        `The rider's train is heading into ${st.name} station on the ${line.name}. In 2 short spoken sentences, tell them one fun thing to see or do near ${st.name}, and remind them ${st.mascot}'s stamp is waiting there.`,
         { system: QUESTIE_PERSONA, search: true, timeoutMs: 15000 },
       );
     } catch {
-      line = nearbyLine(id);
+      reply = nearbyLine(id);
     }
-    setGreeting({ id, text: line });
-    announce({ kind: 'info', banner: false, text: line });
+    setGreeting({ id, text: reply });
+    announce({ kind: 'info', banner: false, text: reply });
     setAsking(false);
   }
 
@@ -138,15 +216,6 @@ export default function Ride() {
 
   const overlays = (
     <>
-      <TripPicker
-        visible={picking}
-        onClose={() => setPicking(false)}
-        onPick={(a, b) => {
-          setTrip([a, b]);
-          setPicking(false);
-          setGreeting(null);
-        }}
-      />
       <PullModal
         card={pulled?.card ?? null}
         isNew={pulled?.isNew ?? false}
@@ -186,7 +255,11 @@ export default function Ride() {
             Motion comfort is on. Eyes up, we’ll talk and buzz you through the ride.
           </T>
           {nextId ? <Button label="Hear it again" kind="blue" style={{ marginTop: 14, alignSelf: 'stretch' }} onPress={() => announceNext(nextId)} /> : null}
-          <Button label={`${stationById(from)?.name} → ${stationById(to)?.name}: change trip`} kind="plain" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={() => setPicking(true)} />
+          {trip.arrived ? (
+            <Button label="Check in again" kind="green" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onCheckIn} />
+          ) : (
+            <Button label="End ride" kind="plain" style={{ marginTop: 8, alignSelf: 'stretch' }} onPress={onEnd} />
+          )}
         </Card>
         {overlays}
       </Screen>
@@ -196,6 +269,7 @@ export default function Ride() {
   return (
     <View style={{ flex: 1, backgroundColor: c.bg }} onLayout={(e) => setAreaH(e.nativeEvent.layout.height)}>
       <RideMap
+        line={line}
         stops={trip.stops}
         reachedIdx={reachedIdx}
         nextStopId={nextId}
@@ -218,10 +292,10 @@ export default function Ride() {
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Change trip"
-            onPress={() => setPicking(true)}
+            accessibilityLabel="Check in for a different trip"
+            onPress={onCheckIn}
             style={[pillStyle(c), { flex: 1, gap: 8 }]}>
-            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: c.red }} />
+            <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: lc.main }} />
             <Text numberOfLines={1} style={{ flex: 1, fontFamily: font.black, fontSize: 16, color: c.text }}>
               {stationById(from)?.name} → {stationById(to)?.name}
             </Text>
@@ -254,24 +328,34 @@ export default function Ride() {
             header={
               <View style={{ paddingHorizontal: 18, paddingBottom: 12, gap: 6 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: c.red, alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontFamily: font.black, fontSize: 17, color: '#fff' }}>RL</Text>
+                  <View style={{ width: 48, height: 48, borderRadius: 14, backgroundColor: lc.main, alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontFamily: font.black, fontSize: 17, color: '#fff' }}>{line.short}</Text>
                   </View>
                   <View style={{ flex: 1 }}>
-                    <T size={22} weight="black">Red Line</T>
+                    <T size={22} weight="black">{line.name}</T>
                     <T size={14} color={c.muted}>
-                      {trip.arrived ? 'You’ve arrived' : `toward ${towardText(trip.direction, to)} · ${trip.stopsLeft} stops left`}
+                      {trip.arrived ? 'You’ve arrived' : `toward ${line.toward(trip.direction, to)} · ${trip.stopsLeft} stops left`}
                     </T>
                   </View>
                   <View style={{ alignItems: 'flex-end' }}>
-                    <Text style={{ fontFamily: font.black, fontSize: 40, lineHeight: 44, color: c.red }}>
+                    <Text style={{ fontFamily: font.black, fontSize: 40, lineHeight: 44, color: lc.main }}>
                       {trip.arrived ? '✓' : minsToNext == null ? '-' : minsToNext === 0 ? 'Now' : minsToNext}
                     </Text>
                     <T size={12} color={c.muted}>{trip.arrived ? 'arrived' : minsToNext === 0 ? 'arriving' : 'min to next'}</T>
                   </View>
                 </View>
                 {trip.error ? <T size={13} color={c.redInk}>{trip.error}</T> : null}
-                {trip.notice ? <T size={13} color={c.muted}>{trip.notice}</T> : null}
+                {trip.notice && !trip.arrived ? <T size={13} color={c.muted}>{trip.notice}</T> : null}
+                {trip.arrived ? (
+                  <View style={{ gap: 8, marginTop: 4 }}>
+                    <T size={14} color={c.muted}>Ride complete. Check in again to keep collecting.</T>
+                    <Button label="Check in again" kind="green" onPress={onCheckIn} />
+                  </View>
+                ) : (
+                  <Pressable accessibilityRole="button" onPress={onEnd} hitSlop={8} style={{ alignSelf: 'flex-start' }}>
+                    <Text style={{ fontFamily: font.black, fontSize: 14, color: c.blueInk }}>End ride</Text>
+                  </Pressable>
+                )}
               </View>
             }>
             <View style={{ backgroundColor: isYourStopNext ? c.redTint : c.blueTint, borderRadius: 22, padding: 16, gap: 10 }}>
@@ -331,13 +415,13 @@ export default function Ride() {
                 return (
                   <View key={id} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 52 }}>
                     <View style={{ width: 28, alignSelf: 'stretch', alignItems: 'center' }}>
-                      <View style={{ position: 'absolute', top: i === 0 ? 26 : 0, bottom: i === last ? 26 : 0, width: 5, backgroundColor: passed ? c.red : c.red + '66' }} />
-                      <View style={{ marginTop: isNext ? 15 : 18, width: isNext ? 22 : 16, height: isNext ? 22 : 16, borderRadius: 11, borderWidth: isNext ? 5 : 4, borderColor: c.red, backgroundColor: passed ? c.red : c.card }} />
+                      <View style={{ position: 'absolute', top: i === 0 ? 26 : 0, bottom: i === last ? 26 : 0, width: 5, backgroundColor: passed ? lc.main : lc.main + '66' }} />
+                      <View style={{ marginTop: isNext ? 15 : 18, width: isNext ? 22 : 16, height: isNext ? 22 : 16, borderRadius: 11, borderWidth: isNext ? 5 : 4, borderColor: lc.main, backgroundColor: passed ? lc.main : c.card }} />
                     </View>
                     <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8, paddingLeft: 10, alignSelf: 'stretch', borderBottomWidth: i === last ? 0 : 1, borderBottomColor: c.line }}>
                       <Text numberOfLines={1} style={{ flex: 1, fontFamily: font.black, fontSize: isNext ? 18 : 16, color: passed ? c.muted : c.text }}>{s.name}</Text>
-                      {i === last ? <Tag label="Your stop" bg={c.redTint} fg={c.redInk} /> : null}
-                      {stamped ? <Tag label="Stamped" bg={c.redTint} fg={c.redInk} /> : null}
+                      {i === last ? <Tag label="Your stop" bg={lc.tint} fg={lc.ink} /> : null}
+                      {stamped ? <Tag label="Stamped" bg={lc.tint} fg={lc.ink} /> : null}
                       {artToFind ? <Tag label="Art ★" bg={c.goldTint} fg={c.goldInk} /> : null}
                       <Text style={{ width: 44, textAlign: 'right', fontFamily: font.heavy, fontSize: 14, color: c.muted }}>{clock(trip.stopTimes[id])}</Text>
                     </View>

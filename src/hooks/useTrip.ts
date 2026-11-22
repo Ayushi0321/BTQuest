@@ -1,11 +1,11 @@
 /**
- * useTrip(from, to): live tracker for "my ride" on the Red Line.
+ * useTrip(line, from, to): live tracker for "my ride" on any line in data/lines.ts.
  *
- *   const trip = useTrip('DAV', 'SST');
+ *   const trip = useTrip('Red', 'DAV', 'SST');
  *   useEffect(() => trip.onArrive((stationId) => setPulled(pull(stationId))), [trip.onArrive]);
  *
  * Returns everything the Ride screen needs:
- *   from, to, direction, stops: the plan (handles the Ashmont/Braintree branches)
+ *   line, from, to, direction, stops: the plan (handles the Ashmont/Braintree branches)
  *   trainId, train: the train we think the rider is on
  *   nextStopId, secondsToNextStop: counts down every second
  *   secondsToDestination
@@ -45,10 +45,11 @@ import * as Location from 'expo-location';
 import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 
 import type { Direction, Train } from '@/api/mbta';
+import type { LineId } from '@/data/lines';
 import { useDemoTrip } from '@/hooks/useDemoTrip';
 import { useNow } from '@/hooks/useNow';
 import { usePolling } from '@/hooks/usePolling';
-import { planTrip } from '@/lib/redLine';
+import { planTrip } from '@/lib/linePlan';
 import { newMemory, tick, type GpsFix, type Memory, type Snapshot, type TripSource } from '@/lib/tripTracker';
 
 export type { TripSource } from '@/lib/tripTracker';
@@ -63,6 +64,7 @@ export const DEMO_MODE = process.env.EXPO_PUBLIC_DEMO_MODE === '1';
 
 
 export type Trip = {
+  line: LineId;
   from: string;
   to: string;
   direction: Direction;
@@ -121,10 +123,10 @@ function useGpsRef(active: boolean): RefObject<GpsFix | null> {
 
 // ─── Hook ────────────────────────────────────────────────────────────────────
 
-function useLiveTrip(from: string, to: string): TripResult {
-  const plan = useMemo(() => planTrip(from, to), [from, to]);
+function useLiveTrip(line: LineId, from: string, to: string): TripResult {
+  const plan = useMemo(() => planTrip(line, from, to), [line, from, to]);
   const planError = 'error' in plan ? plan.error : undefined;
-  const key = `${from}>${to}`;
+  const key = `${line}:${from}>${to}`;
 
   const isFocused = useIsFocused();
   const gpsRef = useGpsRef(isFocused && !planError);
@@ -151,11 +153,12 @@ function useLiveTrip(from: string, to: string): TripResult {
   }, []);
 
   if ('error' in plan) {
-    return { from, to, direction: 'south', stops: [], stopsLeft: 0, arrived: false, stopTimes: {}, source: 'none', loading: false, error: plan.error, onArrive };
+    return { line, from, to, direction: 0, stops: [], stopsLeft: 0, arrived: false, stopTimes: {}, source: 'none', loading: false, error: plan.error, onArrive };
   }
 
   const secondsUntil = (d?: Date) => (d ? Math.max(0, Math.round((d.getTime() - now) / 1000)) : undefined);
   return {
+    line,
     from,
     to,
     direction: plan.direction,
@@ -181,4 +184,4 @@ function useLiveTrip(from: string, to: string): TripResult {
  * safe for the rules of hooks: DEMO_MODE is a build-time constant, so every
  * render of every component always calls the same hook.
  */
-export const useTrip: (from: string, to: string) => TripResult = DEMO_MODE ? useDemoTrip : useLiveTrip;
+export const useTrip: (line: LineId, from: string, to: string) => TripResult = DEMO_MODE ? useDemoTrip : useLiveTrip;

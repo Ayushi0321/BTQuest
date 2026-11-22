@@ -88,8 +88,8 @@ export function offlineStampLine(c: { stationId: string; seed: number; rarity: R
 type Faq = { keywords: string[]; answer: string };
 
 const FAQ: Faq[] = [
-  { keywords: ['who are you', 'your name', 'what are you', 'questie'], answer: 'I’m Questie, your Red Line buddy! I announce your stops, cheer when you unlock stamps, and tell you the stories behind cards and artworks.' },
-  { keywords: ['what is tquest', 'what can i do', 'about', 'how does', 'how do i play', 'what is this app', 'tquest'], answer: 'TQuest turns your Red Line ride into a game. Follow your train on the Ride tab, hear stops your way, and open a painted stamp pack every time you arrive at a station.' },
+  { keywords: ['who are you', 'your name', 'what are you', 'questie'], answer: 'I’m Questie, your T buddy! I announce your stops, cheer when you unlock stamps, and tell you the stories behind cards and artworks.' },
+  { keywords: ['what is tquest', 'what can i do', 'about', 'how does', 'how do i play', 'what is this app', 'tquest'], answer: 'TQuest turns your T ride into a game. Follow your train on the Ride tab, hear stops your way, and open a painted stamp pack every time you arrive at a station.' },
   { keywords: ['legendary', 'rare', 'epic', 'rarity', 'odds', 'chance', 'percent'], answer: 'Every pack is a surprise: 70 percent Common, 22 percent Rare, 7 percent Epic and just 1 percent Legendary. Legendary cards glow gold and have star eyes, so keep riding!' },
   { keywords: ['scan', 'qr', 'code', 'sign', 'camera'], answer: 'Tap the big gold Scan button, point your camera at a TQuest sign, and a pack opens for that place. Artwork signs also unlock an artwork stamp worth 50 points.' },
   { keywords: ['stamp', 'card', 'collect', 'pack', 'album'], answer: 'You get a stamp pack every time you arrive at a station, and another when you scan a TQuest sign at a landmark. Your album lives in the Rewards tab. Tap any card and I’ll tell you its story.' },

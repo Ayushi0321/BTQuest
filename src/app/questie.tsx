@@ -10,6 +10,7 @@ import { geminiOffline, type GeminiTurn, type Source } from '@/api/gemini';
 import { askQuestie, type ChatInput } from '@/api/questie';
 import { Questie } from '@/components/Questie';
 import { OFFLINE_SUGGESTIONS } from '@/data/offline';
+import { STATIONS } from '@/data/stations';
 import { buzz } from '@/lib/haptics';
 import { questieSay, stopQuestie, useQuestieSpeaking } from '@/lib/questieVoice';
 import { useFeedback } from '@/state/feedback';
@@ -34,7 +35,7 @@ const REC_MIME = Platform.OS === 'ios' ? 'audio/wav' : 'audio/aac';
 
 type Msg = { id: number; from: 'questie' | 'rider'; text: string; sources?: Source[]; pending?: boolean; error?: boolean; offline?: boolean };
 
-const GREETING = 'Hi, I’m Questie, your Red Line buddy! Hold the mic and ask me anything, or type below.';
+const GREETING = 'Hi, I’m Questie, your T buddy! Hold the mic and ask me anything, or type below.';
 const SUGGESTIONS = ['What can I do in TQuest?', 'How do I get Legendary cards?', 'Tell me about Kendall Band', 'What’s fun near Park Street?'];
 
 export default function QuestieScreen() {
@@ -62,7 +63,7 @@ export default function QuestieScreen() {
   const riderContext = () => {
     const met = new Set(cards.map((k) => k.stationId)).size;
     const art = Object.keys(artFound).filter((k) => artFound[k]).length;
-    return `${cards.length} stamp cards from ${met} of 22 Red Line stations, ${art} artwork stamps, ${points} points.`;
+    return `${cards.length} stamp cards from ${met} of ${STATIONS.length} stations, ${art} artwork stamps, ${points} points.`;
   };
 
   async function send(inp: ChatInput) {
@@ -135,7 +136,7 @@ export default function QuestieScreen() {
           </Pressable>
           <View style={{ flex: 1 }}>
             <Text style={{ fontFamily: font.black, fontSize: 22, color: c.text }}>Questie</Text>
-            <Text style={{ fontFamily: font.heavy, fontSize: 12, color: c.muted }}>{geminiOffline() ? 'Offline mode · answers common questions' : 'Your Red Line guide · Gemini + ElevenLabs'}</Text>
+            <Text style={{ fontFamily: font.heavy, fontSize: 12, color: c.muted }}>{geminiOffline() ? 'Offline mode · answers common questions' : 'Your T guide · Gemini + ElevenLabs'}</Text>
           </View>
           {talking && (
             <Pressable onPress={stopQuestie} accessibilityLabel="Stop talking"

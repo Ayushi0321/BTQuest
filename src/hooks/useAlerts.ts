@@ -1,7 +1,7 @@
 /**
- * useRedLineAlerts(): Red Line service alerts active right now.
+ * useAlerts(route): service alerts on a route active right now.
  *
- *   const { alerts } = useRedLineAlerts();   // optional arg: route (default 'Red')
+ *   const { alerts } = useAlerts('Green-B');   // default 'Red'
  *
  * - `alerts`: most severe first (see `Alert` in @/api/mbta). Watch for
  *   effect 'SHUTTLE' / 'SUSPENSION', which mean part of the line has no trains.
@@ -10,13 +10,13 @@
  */
 import { useCallback } from 'react';
 
-import { getRedLineAlerts, type Alert, type RouteId } from '@/api/mbta';
+import { getAlerts, type Alert, type RouteId } from '@/api/mbta';
 import { usePolling } from '@/hooks/usePolling';
 
 const POLL_MS = 60_000;
 
-export function useRedLineAlerts(route: RouteId = 'Red'): { alerts: Alert[]; error?: string } {
-  const fetcher = useCallback(() => getRedLineAlerts(route), [route]);
+export function useAlerts(route: RouteId = 'Red'): { alerts: Alert[]; error?: string } {
+  const fetcher = useCallback(() => getAlerts(route), [route]);
   const { data, error } = usePolling(fetcher, POLL_MS, route);
   return { alerts: data ?? [], error };
 }
