@@ -34,12 +34,15 @@ export function useTrainRoom(trainId?: string) {
   const [connected, setConnected] = useState(false);
   const [invite, setInvite] = useState<{ from: PublicRider; duelId: string } | null>(null);
 
-  const transport = useMemo<DuelTransport>(() => {
-    if (!hasSupabase()) return new BotTransport(cards);
-    return new SupabaseDuelTransport(sessionId);
-  }, [cards, sessionId]);
+  // The Supabase transport must not depend on `cards`: a new instance would join
+  // the same train channel while the old one was still subscribed.
+  const supabaseTransport = useMemo(() => (hasSupabase() ? new SupabaseDuelTransport(sessionId) : null), [sessionId]);
   const botTransport = useMemo(() => new BotTransport(cards), [cards]);
+  const transport: DuelTransport = supabaseTransport ?? botTransport;
   const activeTransport = riders.length === 0 ? botTransport : transport;
+
+  // Leave the room when the transport is replaced or the screen unmounts.
+  useEffect(() => () => transport.leaveTrainRoom(), [transport]);
 
   const me = useMemo<PublicRider>(() => ({
     riderId: sessionId,
